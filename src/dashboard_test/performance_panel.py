@@ -30,7 +30,7 @@ def get_data(table_name: Literal['performance', 'session', 'subject']) -> pl.Laz
     return pl.scan_parquet(f's3://aind-scratch-data/ben.hardcastle/cache/nwb_components/v0.0.209/consolidated/{table_name}.parquet')
 
 @pn.cache
-def get_session_mean_dprime() -> pl.DataFrame:
+def get_session_mean_dprime(performance_df: pl.DataFrame | None = None) -> pl.DataFrame:
     """Each session has 1 or more context blocks. This function returns the
     average of the aud and vis intra dprime values across the blocks in each session.
         
@@ -45,7 +45,7 @@ def get_session_mean_dprime() -> pl.DataFrame:
     │ 614910_2022-03-31_0 ┆ 614910     ┆ 2022-03-31 ┆ 3              ┆ 0.577372    ┆ 1          ┆ 1                        │
     └─────────────────────┴────────────┴────────────┴────────────────┴─────────────┴────────────┴──────────────────────────┘
     """
-    df = get_data('performance')
+    df = performance_df or get_data('performance')
     
     # add column with mean of aud and vis intra dprime
     df = df.with_columns(
@@ -142,4 +142,5 @@ main=[subject_id_input_widget, bound_plot, subjects_table_widget]
 if __name__ == '__main__':
     # print(','.join(get_session_mean_dprime().get_column('subject_id').cast(str).unique()))
     import doctest
+import pandas as pd
     doctest.testmod(optionflags=doctest.NORMALIZE_WHITESPACE)
