@@ -142,5 +142,5 @@ main=[subject_id_input_widget, bound_plot, subjects_table_widget]
 if __name__ == '__main__':
     # print(','.join(get_session_mean_dprime().get_column('subject_id').cast(str).unique()))
     import doctest
-import pandas as pd
+    
     doctest.testmod(optionflags=doctest.NORMALIZE_WHITESPACE)
