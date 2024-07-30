@@ -63,7 +63,7 @@ def get_all_unit_locations_df() -> pl.DataFrame:
             ]
         )
     )
-    logger.info("Found unit locations after filtering:", ' '.join(sorted(s for s in location_df['location'].unique() if s is not None)))
+    logger.info(f"Found unit locations after filtering:{' '.join(sorted(s for s in location_df['location'].unique() if s is not None))}")
     return location_df
 
 @pn.cache
@@ -118,7 +118,7 @@ def plot_unit_locations_bar(
         category_orders={"location": df['location'].unique().sort()},   # sort entries in legend
         labels={'location_count': 'units'}, 
         hover_data="session_id", 
-        title=f"breakdown of good units in {structure} in good sessions", 
+        title=f"breakdown of good units in {structure} in good sessions (total = {len(df)} units)", 
     ) 
     fig.update_layout(
         autosize=True,
