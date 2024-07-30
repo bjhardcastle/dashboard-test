@@ -17,12 +17,7 @@ dependencies = [
     "seaborn>=0.13.2",
     "plotly>=5.20.0",
     "watchfiles>=0.21.0",
-    "s3fs>=2024.6.1",
-    "universal-pathlib",
-    "boto3",
-    "python-dotenv>=1.0.1",
-    "beautifulsoup4>=4.12.3",
-    "npc-lims>=0.1.98",
+    "npc-lims>=0.1.168",
 ]
 requires-python = ">=3.11"
 readme = "README.md"
