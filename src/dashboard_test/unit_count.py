@@ -1,9 +1,9 @@
 import logging
 from typing import Literal
 
+from matplotlib import pyplot as plt
 import npc_lims
 import panel as pn
-from panel.pane.plotly import Plotly
 import plotly.express as px
 import polars as pl
 
@@ -207,6 +207,14 @@ def table_holes_to_hit_areas(
         theme="modern",
     )
     
+def plot_ccf_locations(
+    search_term: str | None, 
+    search_type: Literal['starts_with', 'contains'] = 'starts_with',
+    case_sensitive: bool = True,
+):
+    df = get_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive)
+    
+    return pn.pane.Plotly(plt.Figure())
     
 # add a dropdown selector for the search type and a text input for the search term
 search_type_input = pn.widgets.Select(name='Search type', options=['starts_with', 'contains'], value='starts_with')
@@ -214,11 +222,15 @@ search_term_input = pn.widgets.TextInput(name='Search location', value='MOs')
 search_case_sensitive_input = pn.widgets.Checkbox(name='Case sensitive', value=False)
 group_by_input = pn.widgets.Select(name='Group by', options=['session_id', 'subject_id'], value='subject_id')
 
-bound_plot_unit_locations_bar = pn.bind(plot_unit_locations_bar, search_term=search_term_input, search_type=search_type_input, case_sensitive=search_case_sensitive_input, group_by=group_by_input)
-bound_plot_co_recorded_structures_bar = pn.bind(plot_co_recorded_structures_bar, search_term=search_term_input, search_type=search_type_input, case_sensitive=search_case_sensitive_input)
-bound_table_holes_to_hit_areas = pn.bind(table_holes_to_hit_areas, search_term=search_term_input, search_type=search_type_input, case_sensitive=search_case_sensitive_input)
+
+search_input = dict(search_term=search_term_input, search_type=search_type_input, case_sensitive=search_case_sensitive_input)
+bound_plot_unit_locations_bar = pn.bind(plot_unit_locations_bar, **search_input, group_by=group_by_input)
+bound_plot_co_recorded_structures_bar = pn.bind(plot_co_recorded_structures_bar, **search_input)
+bound_table_holes_to_hit_areas = pn.bind(table_holes_to_hit_areas, **search_input)
+bound_plot_ccf_locations = pn.bind(plot_ccf_locations, **search_input)
 # bottom row of less-important plots
-bottom_row = pn.Row(bound_plot_co_recorded_structures_bar, bound_table_holes_to_hit_areas)
+bottom_row = pn.Row(bound_plot_co_recorded_structures_bar, bound_plot_ccf_locations, bound_table_holes_to_hit_areas)
+
 # column of plots
 column = pn.Column(bound_plot_unit_locations_bar, bottom_row)
 
