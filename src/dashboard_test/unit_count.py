@@ -3,6 +3,7 @@ from typing import Literal
 
 import npc_lims
 import panel as pn
+from panel.pane.plotly import Plotly
 import plotly.express as px
 import polars as pl
 
@@ -22,10 +23,10 @@ def get_all_unit_locations_df() -> pl.DataFrame:
             version='v0.0.231', 
             consolidated=True,
         )
-        for component in ('units', 'session', 'performance')
+        for component in ('units', 'session', 'performance', 'electrode_groups')
     )
     logger.info(f"Reading dataframes from {paths}")
-    units, session, performance = [pl.read_parquet(p) for p in paths]
+    units, session, performance, electrode_groups = [pl.read_parquet(p) for p in paths]
     location_df = (
         session.filter(
             pl.col('keywords').list.contains('templeton').not_()
@@ -50,6 +51,15 @@ def get_all_unit_locations_df() -> pl.DataFrame:
             ),
             on='session_id',
         )
+        .join(
+            electrode_groups
+            .select('session_id', 'name', 'location')
+            .with_columns(
+                pl.col('name').alias('electrode_group_name'),
+                pl.col('location').alias("implant_location"),
+            ),
+            on=('session_id', 'electrode_group_name'),
+        )
         .group_by([
             pl.col('session_id'),
             pl.col('location'),
@@ -60,6 +70,7 @@ def get_all_unit_locations_df() -> pl.DataFrame:
                 pl.col('subject_id').first(),
                 pl.col('date').first(),
                 pl.col('unit_id').explode().alias('unit_ids'),
+                pl.col('implant_location').first(),
             ]
         )
     )
@@ -130,7 +141,7 @@ def plot_co_recorded_structures_bar(
     search_term: str | None, 
     search_type: Literal['starts_with', 'contains'] = 'starts_with',
     case_sensitive: bool = True,
-):
+) -> pn.pane.Plotly:
     query_df = get_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive)
     df = (
         get_all_unit_locations_df()
@@ -160,7 +171,7 @@ def plot_co_recorded_structures_bar(
                 pl.col('total_structure_count').first(),
             ]
         )
-        .top_k(k=15, by='total_structure_count')
+        .top_k(k=(k := 15), by='total_structure_count')
         .sort('total_structure_count', descending=True) 
         .explode('session_id', 'unit_count') 
     )
@@ -171,7 +182,7 @@ def plot_co_recorded_structures_bar(
         y="unit_count",
         hover_data="session_id",
         labels={'unit_count': 'units'}, 
-        title=f"structures co-recorded in sessions with {search_term}", 
+        title=f"top {k} structures co-recorded in sessions with {search_term}", 
         barmode='group',
     ) 
     fig.update_layout(
@@ -180,21 +191,42 @@ def plot_co_recorded_structures_bar(
     )
     return pn.pane.Plotly(fig)
 
+def table_holes_to_hit_areas(
+    search_term: str | None, 
+    search_type: Literal['starts_with', 'contains'] = 'starts_with',
+    case_sensitive: bool = True,
+) -> pn.pane.Plotly:
+    df = get_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive)
+    return pn.widgets.Tabulator(
+        df['implant_location'].value_counts(sort=True).to_pandas(),
+        disabled=True,
+        selectable=False,
+        show_index=False,
+        page_size=10,
+        pagination='local',
+        theme="modern",
+    )
+    
+    
 # add a dropdown selector for the search type and a text input for the search term
 search_type_input = pn.widgets.Select(name='Search type', options=['starts_with', 'contains'], value='starts_with')
 search_term_input = pn.widgets.TextInput(name='Search location', value='MOs')
 search_case_sensitive_input = pn.widgets.Checkbox(name='Case sensitive', value=False)
 group_by_input = pn.widgets.Select(name='Group by', options=['session_id', 'subject_id'], value='subject_id')
 
-# column of plots
 bound_plot_unit_locations_bar = pn.bind(plot_unit_locations_bar, search_term=search_term_input, search_type=search_type_input, case_sensitive=search_case_sensitive_input, group_by=group_by_input)
 bound_plot_co_recorded_structures_bar = pn.bind(plot_co_recorded_structures_bar, search_term=search_term_input, search_type=search_type_input, case_sensitive=search_case_sensitive_input)
-plots = pn.Column(bound_plot_unit_locations_bar, bound_plot_co_recorded_structures_bar)
+bound_table_holes_to_hit_areas = pn.bind(table_holes_to_hit_areas, search_term=search_term_input, search_type=search_type_input, case_sensitive=search_case_sensitive_input)
+# bottom row of less-important plots
+bottom_row = pn.Row(bound_plot_co_recorded_structures_bar, bound_table_holes_to_hit_areas)
+# column of plots
+column = pn.Column(bound_plot_unit_locations_bar, bottom_row)
+
 
 pn.template.MaterialTemplate(
     site="Dynamic Routing",
     title="units by location",
     sidebar=[group_by_input, search_type_input, search_term_input, search_case_sensitive_input],
-    main=[plots],
+    main=[column],
 ).servable()
 
