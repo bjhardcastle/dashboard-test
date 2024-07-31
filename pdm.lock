@@ -5,7 +5,7 @@
 groups = ["default"]
 strategy = ["cross_platform"]
 lock_version = "4.4.1"
-content_hash = "sha256:1f616321fa357768dd0fa5c1ece16d65f11923308c1a6251f6dded08817cd22a"
+content_hash = "sha256:d41caace3b8e811c4def9a30ba6425541e07a62538e48538ff2a0b5bb5c6f1a2"
 
 [[package]]
 name = "aind-codeocean-api"
@@ -396,19 +396,17 @@ files = [
 
 [[package]]
 name = "brainglobe-heatmap"
-version = "0.5.3"
-requires_python = ">=3.9.0"
+version = "0.1.dev138"
+requires_python = ">=3.10"
+git = "https://github.com/bjhardcastle/brainglobe-heatmap"
+revision = "743a26ccc351dc16176f364628dd6e88cfbb12db"
 summary = "Rendering anatomical heatmaps with brainrender and matplotlib"
 dependencies = [
-    "brainrender",
+    "brainrender>=2.1.9",
     "matplotlib",
     "myterial",
     "numpy",
     "rich",
-]
-files = [
-    {file = "brainglobe_heatmap-0.5.3-py3-none-any.whl", hash = "sha256:93ee3280302cf96f728f4c90f7f9e52cb76ca2f229f0041cd781002736ccc439"},
-    {file = "brainglobe_heatmap-0.5.3.tar.gz", hash = "sha256:60c20e113142e4b6053cc431f897d283f3cff0c44a273f2a4ffe673ae272f4a7"},
 ]
 
 [[package]]
