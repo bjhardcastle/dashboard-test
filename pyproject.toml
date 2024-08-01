@@ -13,12 +13,12 @@ dependencies = [
     "hvplot>=0.9.2",
     "pyarrow>=15.0.2",
     "bokeh>=3.4.1",
-    "jupyter-bokeh>=4.0.1",
     "seaborn>=0.13.2",
     "plotly>=5.20.0",
     "watchfiles>=0.21.0",
     "npc-lims>=0.1.168",
     "brainglobe-heatmap @ git+https://github.com/bjhardcastle/brainglobe-heatmap",
+    "jupyter-bokeh>=4.0.5",
 ]
 requires-python = ">=3.11"
 readme = "README.md"
