@@ -5,7 +5,7 @@
 groups = ["default"]
 strategy = ["cross_platform"]
 lock_version = "4.4.1"
-content_hash = "sha256:67442c41e957a8c6f27b43c7da2e7f7017a6b3c703be48e200bf17e33b9f72bd"
+content_hash = "sha256:c077c48e7f1622695b76ceac898a9f7bc5bec11e4752f4143d59db55490b25d6"
 
 [[package]]
 name = "aind-codeocean-api"
@@ -635,6 +635,19 @@ files = [
 ]
 
 [[package]]
+name = "colorlog"
+version = "6.8.2"
+requires_python = ">=3.6"
+summary = "Add colours to the output of Python's logging module."
+dependencies = [
+    "colorama; sys_platform == \"win32\"",
+]
+files = [
+    {file = "colorlog-6.8.2-py3-none-any.whl", hash = "sha256:4dcbb62368e2800cb3c5abd348da7e53f6c362dda502ec27c560b2e58a66bd33"},
+    {file = "colorlog-6.8.2.tar.gz", hash = "sha256:3e3e079a41feb5a1b64f978b5ea4f46040a94f11f0e8bbb8261e3dbbeca64d44"},
+]
+
+[[package]]
 name = "comm"
 version = "0.2.2"
 requires_python = ">=3.8"
@@ -881,6 +894,21 @@ files = [
 ]
 
 [[package]]
+name = "flake8"
+version = "7.1.0"
+requires_python = ">=3.8.1"
+summary = "the modular source code checker: pep8 pyflakes and co"
+dependencies = [
+    "mccabe<0.8.0,>=0.7.0",
+    "pycodestyle<2.13.0,>=2.12.0",
+    "pyflakes<3.3.0,>=3.2.0",
+]
+files = [
+    {file = "flake8-7.1.0-py2.py3-none-any.whl", hash = "sha256:2e416edcc62471a64cea09353f4e7bdba32aeb079b6e360554c659a122b1bc6a"},
+    {file = "flake8-7.1.0.tar.gz", hash = "sha256:48a07b626b55236e0fb4784ee69a465fbf59d79eec1f5b4785c3d3bc57d17aa5"},
+]
+
+[[package]]
 name = "fonttools"
 version = "4.53.1"
 requires_python = ">=3.8"
@@ -967,6 +995,21 @@ files = [
 ]
 
 [[package]]
+name = "globus-sdk"
+version = "3.43.0"
+requires_python = ">=3.8"
+summary = "Globus SDK for Python"
+dependencies = [
+    "cryptography!=3.4.0,>=3.3.1",
+    "pyjwt[crypto]<3.0.0,>=2.0.0",
+    "requests<3.0.0,>=2.19.1",
+]
+files = [
+    {file = "globus_sdk-3.43.0-py3-none-any.whl", hash = "sha256:4cfa566c194a46bb281dadbd30742f766d4ddec938de3aeb3ea5a15b4565f9c1"},
+    {file = "globus_sdk-3.43.0.tar.gz", hash = "sha256:753a21baa8c1e26480451cd2075e044e362bbca91b723cc06c4731d4f35097fd"},
+]
+
+[[package]]
 name = "google"
 version = "3.0.0"
 summary = "Python bindings to the Google search engine."
@@ -976,6 +1019,16 @@ dependencies = [
 files = [
     {file = "google-3.0.0-py2.py3-none-any.whl", hash = "sha256:889cf695f84e4ae2c55fbc0cfdaf4c1e729417fa52ab1db0485202ba173e4935"},
     {file = "google-3.0.0.tar.gz", hash = "sha256:143530122ee5130509ad5e989f0512f7cb218b2d4eddbafbad40fd10e8d8ccbe"},
+]
+
+[[package]]
+name = "graphviz"
+version = "0.20.3"
+requires_python = ">=3.8"
+summary = "Simple Python interface for Graphviz"
+files = [
+    {file = "graphviz-0.20.3-py3-none-any.whl", hash = "sha256:81f848f2904515d8cd359cc611faba817598d2feaac4027b266aa3eda7b3dde5"},
+    {file = "graphviz-0.20.3.zip", hash = "sha256:09d6bc81e6a9fa392e7ba52135a9d49f1ed62526f96499325930e87ca1b5925d"},
 ]
 
 [[package]]
@@ -1080,6 +1133,107 @@ files = [
 ]
 
 [[package]]
+name = "ibl-neuropixel"
+version = "1.2.0"
+requires_python = ">=3.8"
+summary = "Collection of tools for Neuropixel 1.0 and 2.0 probes data"
+dependencies = [
+    "iblutil>=1.7.0",
+    "joblib",
+    "matplotlib",
+    "mtscomp",
+    "numpy",
+    "one-api",
+    "pandas",
+    "scipy",
+]
+files = [
+    {file = "ibl_neuropixel-1.2.0-py3-none-any.whl", hash = "sha256:8b59fdb387a132395d81bdfbe655a6827046178416677e4daf85599c839fc094"},
+    {file = "ibl_neuropixel-1.2.0.tar.gz", hash = "sha256:e2810ceb0bfee29d355d235c0ed6ad09e144a2d2155d9061745bf0dbb85cc527"},
+]
+
+[[package]]
+name = "iblatlas"
+version = "0.5.3"
+requires_python = ">=3.8"
+summary = "IBL atlas module"
+dependencies = [
+    "ONE-api",
+    "iblutil",
+    "matplotlib",
+    "numpy",
+    "pynrrd",
+    "scipy",
+]
+files = [
+    {file = "iblatlas-0.5.3-py3-none-any.whl", hash = "sha256:4262c077e6546acab5f6790db0af09ac52fbe4953005793a8145247653b71c0d"},
+    {file = "iblatlas-0.5.3.tar.gz", hash = "sha256:6c25fedce7901c53b2c00b68d16e6704aa0b1f062038f56b046ea805234292c5"},
+]
+
+[[package]]
+name = "ibllib"
+version = "2.38.0"
+requires_python = ">=3.8"
+summary = "IBL libraries"
+dependencies = [
+    "ONE-api~=2.7rc1",
+    "boto3",
+    "click>=7.0.0",
+    "colorlog>=4.0.2",
+    "flake8>=3.7.8",
+    "globus-sdk",
+    "graphviz",
+    "ibl-neuropixel>=1.0.1",
+    "iblatlas>=0.5.3",
+    "iblutil>=1.9.0",
+    "imagecodecs",
+    "matplotlib>=3.0.3",
+    "mtscomp>=1.0.1",
+    "nptdms",
+    "numba>=0.56",
+    "numpy>=1.18",
+    "opencv-python-headless",
+    "pandas",
+    "phylib>=2.6.0",
+    "psychofit",
+    "pyarrow",
+    "pynrrd>=0.4.0",
+    "pyqt5",
+    "pytest",
+    "requests>=2.22.0",
+    "scikit-image",
+    "scikit-learn>=0.22.1",
+    "scipy>=1.7.0",
+    "seaborn>=0.9.0",
+    "slidingRP>=1.1.1",
+    "sparse",
+    "tqdm>=4.32.1",
+]
+files = [
+    {file = "ibllib-2.38.0-py3-none-any.whl", hash = "sha256:78dbf3ca23ba22a9a0a121826f965975cb0f592b13ef083eaaf6084b6e328e55"},
+    {file = "ibllib-2.38.0.tar.gz", hash = "sha256:25a7d5a32e7c15eb4d462ed7164af7a437412666d7aa9af75063bb33818332c1"},
+]
+
+[[package]]
+name = "iblutil"
+version = "1.11.0"
+requires_python = ">=3.8"
+summary = "IBL utilities"
+dependencies = [
+    "colorlog>=6.0.0",
+    "numba",
+    "numpy>=1.18",
+    "packaging",
+    "pandas>=0.24.2",
+    "pyarrow",
+    "tqdm>=4.32.1",
+]
+files = [
+    {file = "iblutil-1.11.0-py3-none-any.whl", hash = "sha256:a5622c02571d1098f7fab09b7e58f6eb02335b6783cc0cc62579fc73553f8e5b"},
+    {file = "iblutil-1.11.0.tar.gz", hash = "sha256:498fc6f998d1c225555a7589c1c9a1c419d30a049ec415eb6d90bdcd04da30d8"},
+]
+
+[[package]]
 name = "idna"
 version = "3.7"
 requires_python = ">=3.5"
@@ -1164,6 +1318,16 @@ dependencies = [
 files = [
     {file = "importlib_metadata-8.2.0-py3-none-any.whl", hash = "sha256:11901fa0c2f97919b288679932bb64febaeacf289d18ac84dd68cb2e74213369"},
     {file = "importlib_metadata-8.2.0.tar.gz", hash = "sha256:72e8d4399996132204f9a16dcc751af254a48f8d1b20b9ff0f98d4a8f901e73d"},
+]
+
+[[package]]
+name = "iniconfig"
+version = "2.0.0"
+requires_python = ">=3.7"
+summary = "brain-dead simple config-ini parsing"
+files = [
+    {file = "iniconfig-2.0.0-py3-none-any.whl", hash = "sha256:b6a85871a79d2e3b22d2d1b94ac2824226a63c6b741c88f7ae975f18b6778374"},
+    {file = "iniconfig-2.0.0.tar.gz", hash = "sha256:2d91e135bf72d31a410b17c16da610a82cb55f6b0477d1a902134b24a455b8b3"},
 ]
 
 [[package]]
@@ -1276,6 +1440,16 @@ summary = "JSON Matching Expressions"
 files = [
     {file = "jmespath-1.0.1-py3-none-any.whl", hash = "sha256:02e2e4cc71b5bcab88332eebf907519190dd9e6e82107fa7f83b1003a6252980"},
     {file = "jmespath-1.0.1.tar.gz", hash = "sha256:90261b206d6defd58fdd5e85f478bf633a2901798906be2ad389150c5c60edbe"},
+]
+
+[[package]]
+name = "joblib"
+version = "1.4.2"
+requires_python = ">=3.8"
+summary = "Lightweight pipelining with Python functions"
+files = [
+    {file = "joblib-1.4.2-py3-none-any.whl", hash = "sha256:06d478d5674cbc267e7496a410ee875abd68e4340feff4490bcb7afb88060ae6"},
+    {file = "joblib-1.4.2.tar.gz", hash = "sha256:2382c5816b2636fbd20a09e0f4e9dad4736765fdfb7dca582943b9c1366b3f0e"},
 ]
 
 [[package]]
@@ -1634,6 +1808,25 @@ files = [
 ]
 
 [[package]]
+name = "llvmlite"
+version = "0.43.0"
+requires_python = ">=3.9"
+summary = "lightweight wrapper around basic LLVM functionality"
+files = [
+    {file = "llvmlite-0.43.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:3e8d0618cb9bfe40ac38a9633f2493d4d4e9fcc2f438d39a4e854f39cc0f5f98"},
+    {file = "llvmlite-0.43.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:e0a9a1a39d4bf3517f2af9d23d479b4175ead205c592ceeb8b89af48a327ea57"},
+    {file = "llvmlite-0.43.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:c1da416ab53e4f7f3bc8d4eeba36d801cc1894b9fbfbf2022b29b6bad34a7df2"},
+    {file = "llvmlite-0.43.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:977525a1e5f4059316b183fb4fd34fa858c9eade31f165427a3977c95e3ee749"},
+    {file = "llvmlite-0.43.0-cp311-cp311-win_amd64.whl", hash = "sha256:d5bd550001d26450bd90777736c69d68c487d17bf371438f975229b2b8241a91"},
+    {file = "llvmlite-0.43.0-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:f99b600aa7f65235a5a05d0b9a9f31150c390f31261f2a0ba678e26823ec38f7"},
+    {file = "llvmlite-0.43.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:35d80d61d0cda2d767f72de99450766250560399edc309da16937b93d3b676e7"},
+    {file = "llvmlite-0.43.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:eccce86bba940bae0d8d48ed925f21dbb813519169246e2ab292b5092aba121f"},
+    {file = "llvmlite-0.43.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:df6509e1507ca0760787a199d19439cc887bfd82226f5af746d6977bd9f66844"},
+    {file = "llvmlite-0.43.0-cp312-cp312-win_amd64.whl", hash = "sha256:7a2872ee80dcf6b5dbdc838763d26554c2a18aa833d31a2635bff16aafefb9c9"},
+    {file = "llvmlite-0.43.0.tar.gz", hash = "sha256:ae2b5b5c3ef67354824fb75517c8db5fbe93bc02cd9671f3c62271626bc041d5"},
+]
+
+[[package]]
 name = "locket"
 version = "1.0.0"
 requires_python = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
@@ -1759,6 +1952,16 @@ files = [
 ]
 
 [[package]]
+name = "mccabe"
+version = "0.7.0"
+requires_python = ">=3.6"
+summary = "McCabe checker, plugin for flake8"
+files = [
+    {file = "mccabe-0.7.0-py2.py3-none-any.whl", hash = "sha256:6c2d30ab6be0e4a46919781807b4f0d834ebdd6c6e3dca0bda5a15f863427b6e"},
+    {file = "mccabe-0.7.0.tar.gz", hash = "sha256:348e0240c33b60bbdf4e523192ef919f28cb2c3d7d5c7794f74009290f236325"},
+]
+
+[[package]]
 name = "mdit-py-plugins"
 version = "0.4.1"
 requires_python = ">=3.8"
@@ -1880,6 +2083,15 @@ files = [
     {file = "msgpack-1.0.8-cp312-cp312-win32.whl", hash = "sha256:64d0fcd436c5683fdd7c907eeae5e2cbb5eb872fafbc03a43609d7941840995c"},
     {file = "msgpack-1.0.8-cp312-cp312-win_amd64.whl", hash = "sha256:74398a4cf19de42e1498368c36eed45d9528f5fd0155241e82c4082b7e16cffd"},
     {file = "msgpack-1.0.8.tar.gz", hash = "sha256:95c02b0e27e706e48d0e5426d1710ca78e0f0628d6e89d5b5a5b91a5f12274f3"},
+]
+
+[[package]]
+name = "mtscomp"
+version = "1.0.2"
+summary = "Lossless compression for electrophysiology time-series"
+files = [
+    {file = "mtscomp-1.0.2-py2.py3-none-any.whl", hash = "sha256:a00a6d46a6155af5bca44931ccf5045756ea8256db8fd452f5e0592b71b4db69"},
+    {file = "mtscomp-1.0.2.tar.gz", hash = "sha256:609c4fe5a0d00532c1452b10318a74e04add8e47c562aca216e7b40de0e4bf73"},
 ]
 
 [[package]]
@@ -2133,6 +2345,17 @@ files = [
 ]
 
 [[package]]
+name = "nptdms"
+version = "1.9.0"
+summary = "Cross-platform, NumPy based module for reading TDMS files produced by LabView"
+dependencies = [
+    "numpy",
+]
+files = [
+    {file = "npTDMS-1.9.0.tar.gz", hash = "sha256:0e65c237e9d50b9b8e162b9c34171353a5ea05f4019c99c3e8ebc00722361cbc"},
+]
+
+[[package]]
 name = "nptyping"
 version = "2.5.0"
 requires_python = ">=3.7"
@@ -2143,6 +2366,29 @@ dependencies = [
 files = [
     {file = "nptyping-2.5.0-py3-none-any.whl", hash = "sha256:764e51836faae33a7ae2e928af574cfb701355647accadcc89f2ad793630b7c8"},
     {file = "nptyping-2.5.0.tar.gz", hash = "sha256:e3d35b53af967e6fb407c3016ff9abae954d3a0568f7cc13a461084224e8e20a"},
+]
+
+[[package]]
+name = "numba"
+version = "0.60.0"
+requires_python = ">=3.9"
+summary = "compiling Python code using LLVM"
+dependencies = [
+    "llvmlite<0.44,>=0.43.0dev0",
+    "numpy<2.1,>=1.22",
+]
+files = [
+    {file = "numba-0.60.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:a17b70fc9e380ee29c42717e8cc0bfaa5556c416d94f9aa96ba13acb41bdece8"},
+    {file = "numba-0.60.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:3fb02b344a2a80efa6f677aa5c40cd5dd452e1b35f8d1c2af0dfd9ada9978e4b"},
+    {file = "numba-0.60.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:5f4fde652ea604ea3c86508a3fb31556a6157b2c76c8b51b1d45eb40c8598703"},
+    {file = "numba-0.60.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:4142d7ac0210cc86432b818338a2bc368dc773a2f5cf1e32ff7c5b378bd63ee8"},
+    {file = "numba-0.60.0-cp311-cp311-win_amd64.whl", hash = "sha256:cac02c041e9b5bc8cf8f2034ff6f0dbafccd1ae9590dc146b3a02a45e53af4e2"},
+    {file = "numba-0.60.0-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:d7da4098db31182fc5ffe4bc42c6f24cd7d1cb8a14b59fd755bfee32e34b8404"},
+    {file = "numba-0.60.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:38d6ea4c1f56417076ecf8fc327c831ae793282e0ff51080c5094cb726507b1c"},
+    {file = "numba-0.60.0-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:62908d29fb6a3229c242e981ca27e32a6e606cc253fc9e8faeb0e48760de241e"},
+    {file = "numba-0.60.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:0ebaa91538e996f708f1ab30ef4d3ddc344b64b5227b67a57aa74f401bb68b9d"},
+    {file = "numba-0.60.0-cp312-cp312-win_amd64.whl", hash = "sha256:f75262e8fe7fa96db1dca93d53a194a38c46da28b112b8a4aca168f0df860347"},
+    {file = "numba-0.60.0.tar.gz", hash = "sha256:5df6158e5584eece5fc83294b949fd30b9f1125df7708862205217e068aabf16"},
 ]
 
 [[package]]
@@ -2197,6 +2443,52 @@ files = [
     {file = "numpy-1.26.4-pp39-pypy39_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:95a7476c59002f2f6c590b9b7b998306fba6a5aa646b1e22ddfeaf8f78c3a29c"},
     {file = "numpy-1.26.4-pp39-pypy39_pp73-win_amd64.whl", hash = "sha256:7e50d0a0cc3189f9cb0aeb3a6a6af18c16f59f004b866cd2be1c14b36134a4a0"},
     {file = "numpy-1.26.4.tar.gz", hash = "sha256:2a02aba9ed12e4ac4eb3ea9421c420301a0c6460d9830d74a9df87efa4912010"},
+]
+
+[[package]]
+name = "one-api"
+version = "2.8.1"
+requires_python = ">=3.7"
+summary = "Open Neurophysiology Environment"
+dependencies = [
+    "boto3",
+    "flake8>=3.7.8",
+    "iblutil>=1.1.0",
+    "numpy>=1.18",
+    "packaging",
+    "pandas>=1.5.0",
+    "pyyaml",
+    "requests>=2.22.0",
+    "tqdm>=4.32.1",
+]
+files = [
+    {file = "ONE_api-2.8.1-py3-none-any.whl", hash = "sha256:0c8edf9d3c7cb46eb16909237707c6d31b7d778b10228a4678ac6aac2f154fc9"},
+    {file = "one_api-2.8.1.tar.gz", hash = "sha256:bc6fd474ecd2ba72f5c3bbbbc75d22d1c76a58d700a8e96c716777287811c678"},
+]
+
+[[package]]
+name = "opencv-python-headless"
+version = "4.10.0.84"
+requires_python = ">=3.6"
+summary = "Wrapper package for OpenCV python bindings."
+dependencies = [
+    "numpy>=1.17.0; python_version >= \"3.7\"",
+    "numpy>=1.17.3; python_version >= \"3.8\"",
+    "numpy>=1.19.3; python_version >= \"3.6\" and platform_system == \"Linux\" and platform_machine == \"aarch64\"",
+    "numpy>=1.19.3; python_version >= \"3.9\"",
+    "numpy>=1.21.2; python_version >= \"3.10\"",
+    "numpy>=1.21.4; python_version >= \"3.10\" and platform_system == \"Darwin\"",
+    "numpy>=1.23.5; python_version >= \"3.11\"",
+    "numpy>=1.26.0; python_version >= \"3.12\"",
+]
+files = [
+    {file = "opencv-python-headless-4.10.0.84.tar.gz", hash = "sha256:f2017c6101d7c2ef8d7bc3b414c37ff7f54d64413a1847d89970b6b7069b4e1a"},
+    {file = "opencv_python_headless-4.10.0.84-cp37-abi3-macosx_11_0_arm64.whl", hash = "sha256:a4f4bcb07d8f8a7704d9c8564c224c8b064c63f430e95b61ac0bffaa374d330e"},
+    {file = "opencv_python_headless-4.10.0.84-cp37-abi3-macosx_12_0_x86_64.whl", hash = "sha256:5ae454ebac0eb0a0b932e3406370aaf4212e6a3fdb5038cc86c7aea15a6851da"},
+    {file = "opencv_python_headless-4.10.0.84-cp37-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:46071015ff9ab40fccd8a163da0ee14ce9846349f06c6c8c0f2870856ffa45db"},
+    {file = "opencv_python_headless-4.10.0.84-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:377d08a7e48a1405b5e84afcbe4798464ce7ee17081c1c23619c8b398ff18295"},
+    {file = "opencv_python_headless-4.10.0.84-cp37-abi3-win32.whl", hash = "sha256:9092404b65458ed87ce932f613ffbb1106ed2c843577501e5768912360fc50ec"},
+    {file = "opencv_python_headless-4.10.0.84-cp37-abi3-win_amd64.whl", hash = "sha256:afcf28bd1209dd58810d33defb622b325d3cbe49dcd7a43a902982c33e5fad05"},
 ]
 
 [[package]]
@@ -2332,6 +2624,19 @@ files = [
 ]
 
 [[package]]
+name = "patsy"
+version = "0.5.6"
+summary = "A Python package for describing statistical models and for building design matrices."
+dependencies = [
+    "numpy>=1.4",
+    "six",
+]
+files = [
+    {file = "patsy-0.5.6-py2.py3-none-any.whl", hash = "sha256:19056886fd8fa71863fa32f0eb090267f21fb74be00f19f5c70b2e9d76c883c6"},
+    {file = "patsy-0.5.6.tar.gz", hash = "sha256:95c6d47a7222535f84bff7f63d7303f2e297747a598db89cf5c67f0c0c7d2cdb"},
+]
+
+[[package]]
 name = "pexpect"
 version = "4.9.0"
 summary = "Pexpect allows easy control of interactive console applications."
@@ -2341,6 +2646,25 @@ dependencies = [
 files = [
     {file = "pexpect-4.9.0-py2.py3-none-any.whl", hash = "sha256:7236d1e080e4936be2dc3e326cec0af72acf9212a7e1d060210e70a47e253523"},
     {file = "pexpect-4.9.0.tar.gz", hash = "sha256:ee7d41123f3c9911050ea2c2dac107568dc43b2d3b0c7557a33212c398ead30f"},
+]
+
+[[package]]
+name = "phylib"
+version = "2.6.0"
+summary = "Ephys data analysis for thousands of channels"
+dependencies = [
+    "dask",
+    "joblib",
+    "mtscomp",
+    "numpy",
+    "requests",
+    "scipy",
+    "toolz",
+    "tqdm",
+]
+files = [
+    {file = "phylib-2.6.0-py2.py3-none-any.whl", hash = "sha256:9b220b898d370baa5db7ed8f0b8e85f067b32b6babf40efb7a1db4bef0611344"},
+    {file = "phylib-2.6.0.tar.gz", hash = "sha256:c93123cc6f29ff60c2bd39ba2e693b8c57bb111fc790d7c1a0859d1a2286a9fa"},
 ]
 
 [[package]]
@@ -2424,6 +2748,16 @@ files = [
 ]
 
 [[package]]
+name = "pluggy"
+version = "1.5.0"
+requires_python = ">=3.8"
+summary = "plugin and hook calling mechanisms for python"
+files = [
+    {file = "pluggy-1.5.0-py3-none-any.whl", hash = "sha256:44e1ad92c8ca002de6377e165f3e0f1be63266ab4d554740532335b9d75ea669"},
+    {file = "pluggy-1.5.0.tar.gz", hash = "sha256:2cffa88e94fdc978c4c574f15f9e59b7f4201d439195c3715ca9e2486f1d0cf1"},
+]
+
+[[package]]
 name = "polars"
 version = "1.3.0"
 requires_python = ">=3.8"
@@ -2492,6 +2826,20 @@ files = [
 ]
 
 [[package]]
+name = "psychofit"
+version = "1.0.0.post0"
+requires_python = ">=3.7"
+summary = "A module for fitting 2AFC psychometric data"
+dependencies = [
+    "numpy",
+    "scipy",
+]
+files = [
+    {file = "Psychofit-1.0.0.post0-py3-none-any.whl", hash = "sha256:d91782b87aa52e4d80dc7eecbb22c58f8feac1528a220ced30a4eebc3fdec1bb"},
+    {file = "Psychofit-1.0.0.post0.tar.gz", hash = "sha256:567885ea3ba9c07c672ed95b2ce6d6fb5e7647b8db7790d5431d6c6a54be509a"},
+]
+
+[[package]]
 name = "ptyprocess"
 version = "0.7.0"
 summary = "Run a subprocess in a pseudo terminal"
@@ -2552,6 +2900,16 @@ files = [
     {file = "pyarrow-17.0.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:b0c6ac301093b42d34410b187bba560b17c0330f64907bfa4f7f7f2444b0cf9b"},
     {file = "pyarrow-17.0.0-cp312-cp312-win_amd64.whl", hash = "sha256:392bc9feabc647338e6c89267635e111d71edad5fcffba204425a7c8d13610d7"},
     {file = "pyarrow-17.0.0.tar.gz", hash = "sha256:4beca9521ed2c0921c1023e68d097d0299b62c362639ea315572a58f3f50fd28"},
+]
+
+[[package]]
+name = "pycodestyle"
+version = "2.12.0"
+requires_python = ">=3.8"
+summary = "Python style guide checker"
+files = [
+    {file = "pycodestyle-2.12.0-py2.py3-none-any.whl", hash = "sha256:949a39f6b86c3e1515ba1787c2022131d165a8ad271b11370a8819aa070269e4"},
+    {file = "pycodestyle-2.12.0.tar.gz", hash = "sha256:442f950141b4f43df752dd303511ffded3a04c2b6fb7f65980574f0c31e6e79c"},
 ]
 
 [[package]]
@@ -2674,6 +3032,16 @@ files = [
 ]
 
 [[package]]
+name = "pyflakes"
+version = "3.2.0"
+requires_python = ">=3.8"
+summary = "passive checker of Python programs"
+files = [
+    {file = "pyflakes-3.2.0-py2.py3-none-any.whl", hash = "sha256:84b5be138a2dfbb40689ca07e2152deb896a65c3a3e24c251c5c62489568074a"},
+    {file = "pyflakes-3.2.0.tar.gz", hash = "sha256:1c61603ff154621fb2a9172037d84dca3500def8c8b630657d1701f026f8af3f"},
+]
+
+[[package]]
 name = "pygments"
 version = "2.18.0"
 requires_python = ">=3.8"
@@ -2699,6 +3067,31 @@ dependencies = [
 files = [
     {file = "pyinspect-0.1.0-py3-none-any.whl", hash = "sha256:31a2137d5bb56a57d350c53597173720429ffcc8ad186bb38aeadd6cd793384e"},
     {file = "pyinspect-0.1.0.tar.gz", hash = "sha256:84aac5e45d8a387ab8deaf30bfd1d382db9fba435f9befa410625ebc4e711f93"},
+]
+
+[[package]]
+name = "pyjwt"
+version = "2.9.0"
+requires_python = ">=3.8"
+summary = "JSON Web Token implementation in Python"
+files = [
+    {file = "PyJWT-2.9.0-py3-none-any.whl", hash = "sha256:3b02fb0f44517787776cf48f2ae25d8e14f300e6d7545a4315cee571a415e850"},
+    {file = "pyjwt-2.9.0.tar.gz", hash = "sha256:7e1e5b56cc735432a7369cbfa0efe50fa113ebecdc04ae6922deba8b84582d0c"},
+]
+
+[[package]]
+name = "pyjwt"
+version = "2.9.0"
+extras = ["crypto"]
+requires_python = ">=3.8"
+summary = "JSON Web Token implementation in Python"
+dependencies = [
+    "cryptography>=3.4.0",
+    "pyjwt==2.9.0",
+]
+files = [
+    {file = "PyJWT-2.9.0-py3-none-any.whl", hash = "sha256:3b02fb0f44517787776cf48f2ae25d8e14f300e6d7545a4315cee571a415e850"},
+    {file = "pyjwt-2.9.0.tar.gz", hash = "sha256:7e1e5b56cc735432a7369cbfa0efe50fa113ebecdc04ae6922deba8b84582d0c"},
 ]
 
 [[package]]
@@ -2737,6 +3130,67 @@ summary = "pyparsing module - Classes and methods to define and execute parsing 
 files = [
     {file = "pyparsing-3.1.2-py3-none-any.whl", hash = "sha256:f9db75911801ed778fe61bb643079ff86601aca99fcae6345aa67292038fb742"},
     {file = "pyparsing-3.1.2.tar.gz", hash = "sha256:a1bac0ce561155ecc3ed78ca94d3c9378656ad4c94c1270de543f621420f94ad"},
+]
+
+[[package]]
+name = "pyqt5"
+version = "5.15.11"
+requires_python = ">=3.8"
+summary = "Python bindings for the Qt cross platform application toolkit"
+dependencies = [
+    "PyQt5-Qt5<5.16.0,>=5.15.2",
+    "PyQt5-sip<13,>=12.15",
+]
+files = [
+    {file = "PyQt5-5.15.11-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:c8b03dd9380bb13c804f0bdb0f4956067f281785b5e12303d529f0462f9afdc2"},
+    {file = "PyQt5-5.15.11-cp38-abi3-macosx_11_0_x86_64.whl", hash = "sha256:6cd75628f6e732b1ffcfe709ab833a0716c0445d7aec8046a48d5843352becb6"},
+    {file = "PyQt5-5.15.11-cp38-abi3-manylinux_2_17_x86_64.whl", hash = "sha256:cd672a6738d1ae33ef7d9efa8e6cb0a1525ecf53ec86da80a9e1b6ec38c8d0f1"},
+    {file = "PyQt5-5.15.11-cp38-abi3-win32.whl", hash = "sha256:76be0322ceda5deecd1708a8d628e698089a1cea80d1a49d242a6d579a40babd"},
+    {file = "PyQt5-5.15.11-cp38-abi3-win_amd64.whl", hash = "sha256:bdde598a3bb95022131a5c9ea62e0a96bd6fb28932cc1619fd7ba211531b7517"},
+    {file = "PyQt5-5.15.11.tar.gz", hash = "sha256:fda45743ebb4a27b4b1a51c6d8ef455c4c1b5d610c90d2934c7802b5c1557c52"},
+]
+
+[[package]]
+name = "pyqt5-qt5"
+version = "5.15.14"
+summary = "The subset of a Qt installation needed by PyQt5."
+files = [
+    {file = "PyQt5_Qt5-5.15.14-py3-none-macosx_10_13_x86_64.whl", hash = "sha256:c89b35b2aaf24d2805cc76fe31880c77b7f7557db8aafb26f1015f1bba7031d6"},
+    {file = "PyQt5_Qt5-5.15.14-py3-none-macosx_11_0_arm64.whl", hash = "sha256:730da7e6a97f6bad1b6df21082fe625647730418bc83e20cbc2ff6401ed0a8be"},
+    {file = "PyQt5_Qt5-5.15.14-py3-none-manylinux2014_x86_64.whl", hash = "sha256:aa3911276b1a1aa9b5b9cba687ef905faddd706980d34e234312591c3d3cbef8"},
+]
+
+[[package]]
+name = "pyqt5-sip"
+version = "12.15.0"
+requires_python = ">=3.8"
+summary = "The sip module support for PyQt5"
+files = [
+    {file = "PyQt5_sip-12.15.0-cp311-cp311-macosx_10_9_universal2.whl", hash = "sha256:855563d4d3b59ce7438bbf2dd32fed2707787defa40f3efe94f204a19ef92b25"},
+    {file = "PyQt5_sip-12.15.0-cp311-cp311-manylinux_2_5_x86_64.manylinux1_x86_64.whl", hash = "sha256:0b718a362f4392430903bbb2a4b9bbff9841a16a52f0cfdd5b5bbd9d11457980"},
+    {file = "PyQt5_sip-12.15.0-cp311-cp311-win32.whl", hash = "sha256:2575f428de584a12009fd29d00c89df16ed101a3b38beba818dfdcbc4a10709c"},
+    {file = "PyQt5_sip-12.15.0-cp311-cp311-win_amd64.whl", hash = "sha256:c85be433fbafcb3d417581c0e1b67c8198d23858166e4f938e971c2262c13cdb"},
+    {file = "PyQt5_sip-12.15.0-cp312-cp312-macosx_10_9_universal2.whl", hash = "sha256:852b75cf208825602480e95ab63314108f872d0da251e9ad3deaaff5a183a6f5"},
+    {file = "PyQt5_sip-12.15.0-cp312-cp312-manylinux_2_5_x86_64.manylinux1_x86_64.whl", hash = "sha256:0cd21c3215e3c47fdd5fa7a2dc3dd1e07a7230b0626e905a7217925068c788b9"},
+    {file = "PyQt5_sip-12.15.0-cp312-cp312-win32.whl", hash = "sha256:b58eeedc9b2a3037b136bf96915196c391a33be470ed1c0723d7163ef0b727a2"},
+    {file = "PyQt5_sip-12.15.0-cp312-cp312-win_amd64.whl", hash = "sha256:24a1d4937332bf0a38dd95bb2ce4d89723df449f6e912b52ef0e107e11fefac1"},
+    {file = "PyQt5_sip-12.15.0.tar.gz", hash = "sha256:d23fdfcf363b5cedd9d39f8a9c5710e7d52804f5b08a58e91c638b36eafcb702"},
+]
+
+[[package]]
+name = "pytest"
+version = "8.3.2"
+requires_python = ">=3.8"
+summary = "pytest: simple powerful testing with Python"
+dependencies = [
+    "colorama; sys_platform == \"win32\"",
+    "iniconfig",
+    "packaging",
+    "pluggy<2,>=1.5",
+]
+files = [
+    {file = "pytest-8.3.2-py3-none-any.whl", hash = "sha256:4ba08f9ae7dcf84ded419494d229b48d0903ea6407b030eaec46df5e6a73bba5"},
+    {file = "pytest-8.3.2.tar.gz", hash = "sha256:c132345d12ce551242c87269de812483f5bcc87cdbb4722e48487ba194f9fdce"},
 ]
 
 [[package]]
@@ -2779,6 +3233,25 @@ summary = "World timezone definitions, modern and historical"
 files = [
     {file = "pytz-2024.1-py2.py3-none-any.whl", hash = "sha256:328171f4e3623139da4983451950b28e95ac706e13f3f2630a879749e7a8b319"},
     {file = "pytz-2024.1.tar.gz", hash = "sha256:2a29735ea9c18baf14b448846bde5a48030ed267578472d8955cd0e7443a9812"},
+]
+
+[[package]]
+name = "pyvista"
+version = "0.44.1"
+requires_python = ">=3.8"
+summary = "Easier Pythonic interface to VTK"
+dependencies = [
+    "matplotlib>=3.0.1",
+    "numpy>=1.21.0",
+    "pillow",
+    "pooch",
+    "scooby>=0.5.1",
+    "typing-extensions",
+    "vtk",
+]
+files = [
+    {file = "pyvista-0.44.1-py3-none-any.whl", hash = "sha256:7a80e8114220ca36d57a4def8e6a3067c908b53b62aa426ea76c76069bb6d1c0"},
+    {file = "pyvista-0.44.1.tar.gz", hash = "sha256:63976f5d57d151b3f7e1616dde40dcf56a66d1f37f6db067087fa9cc9667f512"},
 ]
 
 [[package]]
@@ -3122,6 +3595,31 @@ files = [
 ]
 
 [[package]]
+name = "scikit-learn"
+version = "1.5.1"
+requires_python = ">=3.9"
+summary = "A set of python modules for machine learning and data mining"
+dependencies = [
+    "joblib>=1.2.0",
+    "numpy>=1.19.5",
+    "scipy>=1.6.0",
+    "threadpoolctl>=3.1.0",
+]
+files = [
+    {file = "scikit_learn-1.5.1-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:154297ee43c0b83af12464adeab378dee2d0a700ccd03979e2b821e7dd7cc1c2"},
+    {file = "scikit_learn-1.5.1-cp311-cp311-macosx_12_0_arm64.whl", hash = "sha256:b5e865e9bd59396220de49cb4a57b17016256637c61b4c5cc81aaf16bc123bbe"},
+    {file = "scikit_learn-1.5.1-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:909144d50f367a513cee6090873ae582dba019cb3fca063b38054fa42704c3a4"},
+    {file = "scikit_learn-1.5.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:689b6f74b2c880276e365fe84fe4f1befd6a774f016339c65655eaff12e10cbf"},
+    {file = "scikit_learn-1.5.1-cp311-cp311-win_amd64.whl", hash = "sha256:9a07f90846313a7639af6a019d849ff72baadfa4c74c778821ae0fad07b7275b"},
+    {file = "scikit_learn-1.5.1-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:5944ce1faada31c55fb2ba20a5346b88e36811aab504ccafb9f0339e9f780395"},
+    {file = "scikit_learn-1.5.1-cp312-cp312-macosx_12_0_arm64.whl", hash = "sha256:0828673c5b520e879f2af6a9e99eee0eefea69a2188be1ca68a6121b809055c1"},
+    {file = "scikit_learn-1.5.1-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:508907e5f81390e16d754e8815f7497e52139162fd69c4fdbd2dfa5d6cc88915"},
+    {file = "scikit_learn-1.5.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:97625f217c5c0c5d0505fa2af28ae424bd37949bb2f16ace3ff5f2f81fb4498b"},
+    {file = "scikit_learn-1.5.1-cp312-cp312-win_amd64.whl", hash = "sha256:da3f404e9e284d2b0a157e1b56b6566a34eb2798205cba35a211df3296ab7a74"},
+    {file = "scikit_learn-1.5.1.tar.gz", hash = "sha256:0ea5d40c0e3951df445721927448755d3fe1d80833b0b7308ebff5d2a45e6414"},
+]
+
+[[package]]
 name = "scipy"
 version = "1.14.0"
 requires_python = ">=3.10"
@@ -3147,6 +3645,16 @@ files = [
     {file = "scipy-1.14.0-cp312-cp312-musllinux_1_1_x86_64.whl", hash = "sha256:65df4da3c12a2bb9ad52b86b4dcf46813e869afb006e58be0f516bc370165159"},
     {file = "scipy-1.14.0-cp312-cp312-win_amd64.whl", hash = "sha256:4c4161597c75043f7154238ef419c29a64ac4a7c889d588ea77690ac4d0d9b20"},
     {file = "scipy-1.14.0.tar.gz", hash = "sha256:b5923f48cb840380f9854339176ef21763118a7300a88203ccd0bdd26e58527b"},
+]
+
+[[package]]
+name = "scooby"
+version = "0.10.0"
+requires_python = ">=3.8"
+summary = "A Great Dane turned Python environment detective"
+files = [
+    {file = "scooby-0.10.0-py3-none-any.whl", hash = "sha256:0a3d7e304f8ebb16f69ff7f6360c345d7f50b45f2ddbf7c3d18a6a0dc2cb03a6"},
+    {file = "scooby-0.10.0.tar.gz", hash = "sha256:7ea33c262c0cc6a33c6eeeb5648df787be4f22660e53c114e5fff1b811a8854f"},
 ]
 
 [[package]]
@@ -3195,6 +3703,23 @@ files = [
 ]
 
 [[package]]
+name = "slidingrp"
+version = "1.1.1"
+requires_python = ">=3.8"
+summary = "Quality metric from spike trains"
+dependencies = [
+    "colorcet",
+    "matplotlib",
+    "numpy",
+    "scipy",
+    "statsmodels",
+]
+files = [
+    {file = "slidingRP-1.1.1-py3-none-any.whl", hash = "sha256:3da89aeabb18966b2d2125c3b0aaa8c697a1411a37d0963f6749992f04f01d8a"},
+    {file = "slidingRP-1.1.1.tar.gz", hash = "sha256:89bba7d1ba74c74b5e188268cb86d4c512e0fcf217a9ad251b7c27c4f06bcc45"},
+]
+
+[[package]]
 name = "slurmio"
 version = "0.1.1"
 requires_python = ">=3.9.0"
@@ -3225,6 +3750,21 @@ files = [
 ]
 
 [[package]]
+name = "sparse"
+version = "0.15.4"
+requires_python = ">=3.8"
+summary = "Sparse n-dimensional arrays for the PyData ecosystem"
+dependencies = [
+    "numba>=0.49",
+    "numpy>=1.17",
+    "scipy>=0.19",
+]
+files = [
+    {file = "sparse-0.15.4-py2.py3-none-any.whl", hash = "sha256:76ec76fee2aee82a84eb97155dd530a9644e3b1fdea2406bc4b454698b36d938"},
+    {file = "sparse-0.15.4.tar.gz", hash = "sha256:d4b1c57d24ff0f64f2fd5b5a95b49b7fb84ed207a26d7d58ce2764dcc5c72b84"},
+]
+
+[[package]]
 name = "stack-data"
 version = "0.6.3"
 summary = "Extract data from python stack frames and tracebacks for informative displays"
@@ -3236,6 +3776,34 @@ dependencies = [
 files = [
     {file = "stack_data-0.6.3-py3-none-any.whl", hash = "sha256:d5558e0c25a4cb0853cddad3d77da9891a08cb85dd9f9f91b9f8cd66e511e695"},
     {file = "stack_data-0.6.3.tar.gz", hash = "sha256:836a778de4fec4dcd1dcd89ed8abff8a221f58308462e1c4aa2a3cf30148f0b9"},
+]
+
+[[package]]
+name = "statsmodels"
+version = "0.14.2"
+requires_python = ">=3.9"
+summary = "Statistical computations and models for Python"
+dependencies = [
+    "numpy>=1.22.3",
+    "packaging>=21.3",
+    "pandas!=2.1.0,>=1.4",
+    "patsy>=0.5.6",
+    "scipy!=1.9.2,>=1.8",
+]
+files = [
+    {file = "statsmodels-0.14.2-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:50fcb633987779e795142f51ba49fb27648d46e8a1382b32ebe8e503aaabaa9e"},
+    {file = "statsmodels-0.14.2-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:876794068abfaeed41df71b7887000031ecf44fbfa6b50d53ccb12ebb4ab747a"},
+    {file = "statsmodels-0.14.2-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:7a91f6c4943de13e3ce2e20ee3b5d26d02bd42300616a421becd53756f5deb37"},
+    {file = "statsmodels-0.14.2-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:4864a1c4615c5ea5f2e3b078a75bdedc90dd9da210a37e0738e064b419eccee2"},
+    {file = "statsmodels-0.14.2-cp311-cp311-musllinux_1_1_x86_64.whl", hash = "sha256:afbd92410e0df06f3d8c4e7c0e2e71f63f4969531f280fb66059e2ecdb6e0415"},
+    {file = "statsmodels-0.14.2-cp311-cp311-win_amd64.whl", hash = "sha256:8e004cfad0e46ce73fe3f3812010c746f0d4cfd48e307b45c14e9e360f3d2510"},
+    {file = "statsmodels-0.14.2-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:eb0ba1ad3627705f5ae20af6b2982f500546d43892543b36c7bca3e2f87105e7"},
+    {file = "statsmodels-0.14.2-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:90fd2f0110b73fc3fa5a2f21c3ca99b0e22285cccf38e56b5b8fd8ce28791b0f"},
+    {file = "statsmodels-0.14.2-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:ac780ad9ff552773798829a0b9c46820b0faa10e6454891f5e49a845123758ab"},
+    {file = "statsmodels-0.14.2-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:55d1742778400ae67acb04b50a2c7f5804182f8a874bd09ca397d69ed159a751"},
+    {file = "statsmodels-0.14.2-cp312-cp312-musllinux_1_1_x86_64.whl", hash = "sha256:f870d14a587ea58a3b596aa994c2ed889cc051f9e450e887d2c83656fc6a64bf"},
+    {file = "statsmodels-0.14.2-cp312-cp312-win_amd64.whl", hash = "sha256:f450fcbae214aae66bd9d2b9af48e0f8ba1cb0e8596c6ebb34e6e3f0fec6542c"},
+    {file = "statsmodels-0.14.2.tar.gz", hash = "sha256:890550147ad3a81cda24f0ba1a5c4021adc1601080bd00e191ae7cd6feecd6ad"},
 ]
 
 [[package]]
@@ -3285,6 +3853,16 @@ dependencies = [
 files = [
     {file = "terminado-0.18.1-py3-none-any.whl", hash = "sha256:a4468e1b37bb318f8a86514f65814e1afc977cf29b3992a4500d9dd305dcceb0"},
     {file = "terminado-0.18.1.tar.gz", hash = "sha256:de09f2c4b85de4765f7714688fff57d3e75bad1f909b589fde880460c753fd2e"},
+]
+
+[[package]]
+name = "threadpoolctl"
+version = "3.5.0"
+requires_python = ">=3.8"
+summary = "threadpoolctl"
+files = [
+    {file = "threadpoolctl-3.5.0-py3-none-any.whl", hash = "sha256:56c1e26c150397e58c4926da8eeee87533b1e32bef131bd4bf6a2f45f3185467"},
+    {file = "threadpoolctl-3.5.0.tar.gz", hash = "sha256:082433502dd922bf738de0d8bcc4fdcbf0979ff44c42bd40f5af8a282f6fa107"},
 ]
 
 [[package]]

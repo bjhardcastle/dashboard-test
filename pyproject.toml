@@ -19,6 +19,9 @@ dependencies = [
     "npc-lims>=0.1.168",
     "brainglobe-heatmap @ git+https://github.com/bjhardcastle/brainglobe-heatmap",
     "jupyter-bokeh>=4.0.5",
+    "ONE-api>=2.8.1",
+    "ibllib>=2.38.0",
+    "pyvista>=0.44.1",
 ]
 requires-python = ">=3.11"
 readme = "README.md"
