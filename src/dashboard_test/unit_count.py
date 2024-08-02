@@ -129,7 +129,7 @@ def plot_unit_locations_bar(
         category_orders={"location": df['location'].unique().sort()},   # sort entries in legend
         labels={'location_count': 'units'}, 
         hover_data="session_id", 
-        title=f"breakdown of good units in {structure} in good sessions (total = {len(df)} units)", 
+        title=f"breakdown of good units in {structure} in good sessions (total = {df['location_count'].sum()} units)",
     ) 
     fig.update_layout(
         autosize=True,
