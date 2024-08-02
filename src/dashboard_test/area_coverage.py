@@ -38,9 +38,9 @@ def get_component_lazyframe(nwb_component: npc_lims.NWBComponentStr) -> pl.LazyF
     return pl.scan_parquet(path)
 
 @pn.cache
-def get_good_units_lazyframe() -> pl.LazyFrame:
+def get_good_units_df() -> pl.DataFrame:
 
-    location_lf = (
+    location_df = (
         get_component_lazyframe("session")
         .filter(
             pl.col('keywords').list.contains('templeton').not_()
@@ -87,26 +87,9 @@ def get_good_units_lazyframe() -> pl.LazyFrame:
             on=('session_id', 'electrode_group_name'),
             how="full",
         )
-        .group_by([
-            pl.col('session_id'),
-            pl.col('location'),
-        ])
-        .agg([
-            pl.col('location').count().alias('location_count'),
-            pl.col('structure').first(),
-            pl.col('subject_id').first(),
-            pl.col('date').first(),
-            pl.col('unit_id').explode().alias('unit_ids'),
-            pl.col('implant_location').first(),
-            pl.col('electrode_group_name').first(),
-            pl.col('ccf_ap').first(),
-            pl.col('ccf_dv').first(),
-            pl.col('ccf_ml').first(),
-            pl.col('peak_channel').first(),
-        ])
     )    
-    logger.info("Fetched all unit locations")
-    return location_lf
+    logger.info(f"Fetched {len(location_df)} good units")
+    return location_df
 
 
 DataFrameOrLazyFrame = TypeVar("DataFrameOrLazyFrame", pl.DataFrame, pl.LazyFrame)
@@ -127,6 +110,26 @@ def apply_location_query(
     df_or_lf = df_or_lf.filter(location_expr)
     return df_or_lf
 
+def apply_unit_count_group_by(
+    df_or_lf: DataFrameOrLazyFrame,
+) -> DataFrameOrLazyFrame:
+    return (
+        df_or_lf
+        .group_by([
+            pl.col('session_id'),
+            pl.col('location'),
+        ])
+        .agg([
+            pl.col('location').count().alias('location_count'),
+            pl.col('structure').first(),
+            pl.col('subject_id').first(),
+            pl.col('date').first(),
+            pl.col('unit_id').explode().alias('unit_ids'),
+            pl.col('implant_location').first(),
+            pl.col('electrode_group_name').first(),
+        ])
+    )
+    
 @pn.cache
 def get_unit_location_query_df(
     search_term: str, 
@@ -135,14 +138,14 @@ def get_unit_location_query_df(
 ) -> pl.DataFrame:
     df = (
         apply_location_query(
-            get_good_units_lazyframe(),
+            get_good_units_df(),
             search_term=search_term,
             search_type=search_type,
             case_sensitive=case_sensitive,
         )
         .sort('date', "location")
-    ).collect()
-    logger.info(f"Found {len(df)} units: location.{search_type}({search_term}, {case_sensitive=})")
+    )
+    logger.info(f"Found {len(df)} areas across {df['session_id'].drop_nulls().n_unique()} sessions: location.{search_type}({search_term}, {case_sensitive=})")
     return df
 
 def get_ccf_location_query_lazyframe(
@@ -161,6 +164,17 @@ def get_ccf_location_query_lazyframe(
             logger.warning(f"Multiple implant locations found: {_locations}")
         implant_location = _locations[0]
     
+    query_df = get_unit_location_query_df(
+        search_term=search_term,
+        search_type=search_type,
+        case_sensitive=case_sensitive,
+    )
+    
+    join_on = ['session_id', 'electrode_group_name']
+    if not whole_probe:
+        join_on.extend(["ccf_ap", "ccf_dv", "ccf_ml"])
+    join_on = tuple(join_on)    # type: ignore
+
     electrodes_lf = (
         get_component_lazyframe('electrodes')
         .rename({
@@ -180,32 +194,12 @@ def get_ccf_location_query_lazyframe(
             ),
             on=('session_id', 'electrode_group_name'),
         )
-        .filter(
-            pl.col('session_id').is_in(
-                apply_location_query(
-                    get_component_lazyframe('electrodes'),
-                    search_term=search_term,
-                    search_type=search_type,
-                    case_sensitive=case_sensitive,
-                )
-                .select('session_id')
-                .collect()
-                ['session_id']
-                .unique()                
-            )
-        )
+        .join(
+            other=query_df.lazy(),
+            on=join_on,  
+            how="semi", # only keep rows in left table (electrodes) that have match in right table (ie selected units)
+        ) 
     )
-
-    if not whole_probe:
-        electrodes_lf = (
-            electrodes_lf
-            .join(
-                other=get_good_units_lazyframe(),
-                left_on=('session_id', 'electrode_group_name', 'channel'),
-                right_on=('session_id', 'electrode_group_name', 'peak_channel'),    
-                how="semi", # only keep rows in left table (electrodes) that have match in right table (ie selected units)
-            ) 
-        )
 
     return (
         electrodes_lf
@@ -255,11 +249,11 @@ def plot_unit_locations_bar(
     if not search_term:
         return pn.pane.Plotly(None)
 
-    df = get_unit_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive)
+    df = apply_unit_count_group_by(get_unit_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive))
     
     s = df['structure'].drop_nulls().unique()
     if len(s) > 1:
-        logger.warning(f"Multiple structures found: {list(s)}")
+        logger.info(f"Multiple structures found: {list(s)}")
         structure = s.to_list()
     elif len(s) == 0:
         logger.warning("No structures found")
@@ -275,7 +269,7 @@ def plot_unit_locations_bar(
         category_orders={"location": df['location'].unique().sort()},   # sort entries in legend
         labels={'location_count': 'units'}, 
         hover_data="session_id", 
-        title=f"breakdown of good units in {structure} in good sessions (total = {sum(df['location_count'])} units)", 
+        title=f"breakdown of good units ({sum(df['location_count'])}) in good sessions ({df['session_id'].drop_nulls().n_unique()})", 
     ) 
     fig.update_layout(
         autosize=True,
@@ -290,7 +284,7 @@ def plot_co_recorded_structures_bar(
 ) -> pn.pane.Plotly:
     query_df = get_unit_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive)
     lf = (
-        get_good_units_lazyframe()
+        apply_unit_count_group_by(get_good_units_df())
         .lazy()
         .filter(
             pl.col('session_id').is_in(query_df['session_id'].unique())
@@ -373,31 +367,42 @@ def plot_ccf_locations_3d(
     implant_location: str | list[str] | None = None,
     whole_probe: bool = False,
 )  -> pn.pane.VTK:
-    whole_probe = True
+    
+    whole_probe = False
+    
     query_df = get_unit_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive)
     ccf_df = get_ccf_location_query_lazyframe(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive, implant_location=implant_location, whole_probe=whole_probe).collect()
+    logger.info(
+        f"Found {len(ccf_df)} {'electrode' if whole_probe else 'unit'} locations "
+        f"from {ccf_df['session_id'].drop_nulls().n_unique()} sessions: "
+        f"location.{search_type}({search_term}, {case_sensitive=}, {implant_location=}, {whole_probe=})")
     
     scene = get_ccf_scene()     
     
     logger.info(f"Removing {len(scene.actors[1:])} actors from 3D scene")
     scene.remove(*scene.actors[1:]) # remove all actors except root-brain region
     if search_term: # if search_term is empty, areas will be every area recorded, which will be too many
-        for area in (areas := query_df['location'].drop_nulls().unique()):
+        regions = query_df['location'].drop_nulls().unique().to_list()
+        logger.info(f"Adding {len(regions)} brain regions to 3D scene")
+        for region in regions:
             scene.add_brain_region(
-                area, 
+                region, 
                 hemisphere='left', 
                 alpha=0.1,
-                color="0x" + ccf_df.filter(pl.col('location') == area)['color_hex_triplet'][0],
             )
-        logger.info(f"Added {len(areas)} areas to 3D scene")
-        
     
+        points = (
+            ccf_df
+            .sort('session_id', 'electrode_group_name', 'ccf_dv')
+            .gather_every(5 if whole_probe else 1)
+        )
+        logger.info(f"Adding {len(points)} {'electrode' if whole_probe else 'unit'} points to 3D scene")
         track_points = brainrender.actors.Points(
-            ccf_df.select('ccf_dv', 'ccf_ap', 'ccf_ml').to_numpy(), 
-            radius=20,
+            points.select('ccf_dv', 'ccf_ap', 'ccf_ml').to_numpy(),
+            radius=15,
             res=1,
             # colors='0x000000',
-            colors=ccf_df['color_hex_str'].to_list(),
+            colors=points['color_hex_str'].to_list(),
             alpha=1,
         )
         scene.add(track_points)
@@ -594,10 +599,10 @@ bottom_row = pn.Row(bound_plot_co_recorded_structures_bar, bound_plot_ccf_locati
 column = pn.Column(bound_plot_unit_locations_bar, bottom_row)
 
 bound_plot_ccf_locations()
-print(__file__)
+
 pn.template.MaterialTemplate(
-    site="Dynamic Routing",
-    title=__file__.split('.py')[0].replace('_', ' ').title(),
+    site="Dynamic Routing dashboard",
+    title=__file__.split('\\')[-1].split('.py')[0].replace('_', ' ').title(),
     sidebar=[group_by_input, search_type_input, search_term_input, search_case_sensitive_input, whole_probe_input],
     main=[column],
 ).servable()
