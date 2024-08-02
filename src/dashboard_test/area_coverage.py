@@ -12,8 +12,9 @@ import panel as pn
 import plotly.express as px
 import polars as pl
 import brainglobe_heatmap
-import iblatlas.plots
-import iblatlas.atlas
+import upath
+# import iblatlas.plots
+# import iblatlas.atlas
 import vtk
 
 # pn.extension('vtk')   
@@ -28,7 +29,7 @@ logging.basicConfig(
 )
 
 @pn.cache
-def get_component_lazyframe(nwb_component: npc_lims.NWBComponentStr) -> pl.LazyFrame:
+def get_component_lf(nwb_component: npc_lims.NWBComponentStr) -> pl.LazyFrame:
     path = npc_lims.get_cache_path(
         nwb_component, 
         version='v0.0.231', 
@@ -36,18 +37,39 @@ def get_component_lazyframe(nwb_component: npc_lims.NWBComponentStr) -> pl.LazyF
     )
     logger.info(f"Reading dataframe from {path}")
     return pl.scan_parquet(path)
+    
+@pn.cache
+def get_ccf_structure_tree_lf() -> pl.LazyFrame:
+    isilon_path = upath.UPath('//allen/programs/mindscope/workgroups/np-behavior/ccf_structure_tree_2017.csv')
+    github_path = upath.UPath('https://raw.githubusercontent.com/cortex-lab/allenCCF/master/structure_tree_safe_2017.csv')
+    path = isilon_path if isilon_path.exists() else github_path
+    return (
+        pl.scan_csv(path.as_posix())
+        .with_columns(
+            color_hex_int=pl.col('color_hex_triplet').str.to_integer(base=16),
+            color_hex_str=pl.lit('0x') + pl.col('color_hex_triplet'),
+        )
+        .with_columns(
+            r=pl.col('color_hex_triplet').str.slice(0, 2).str.to_integer(base=16).mul(1/255),
+            g=pl.col('color_hex_triplet').str.slice(2, 2).str.to_integer(base=16).mul(1/255),
+            b=pl.col('color_hex_triplet').str.slice(4, 2).str.to_integer(base=16).mul(1/255),
+        )
+        .with_columns(
+            color_rgb=pl.concat_list('r', 'g', 'b'),
+        )
+        .drop('r', 'g', 'b')
+    )
 
 @pn.cache
 def get_good_units_df() -> pl.DataFrame:
-
-    location_df = (
-        get_component_lazyframe("session")
+    good_units = (
+        get_component_lf("session")
         .filter(
             pl.col('keywords').list.contains('templeton').not_()
         )
         .join(
             other=(
-                get_component_lazyframe("performance")
+                get_component_lf("performance")
                 .filter(
                     pl.col('same_modal_dprime') > 1.0,
                     pl.col('cross_modal_dprime') > 1.0,
@@ -66,7 +88,7 @@ def get_good_units_df() -> pl.DataFrame:
         )
         .join(
             other=(
-                get_component_lazyframe("units")
+                get_component_lf("units")
                 .filter(
                     pl.col('isi_violations_count') < 0.5,
                     pl.col('amplitude_cutoff') < 0.1,
@@ -77,7 +99,7 @@ def get_good_units_df() -> pl.DataFrame:
         )
         .join(
             other=(
-                get_component_lazyframe('electrode_groups')
+                get_component_lf('electrode_groups')
                     .rename({
                         'name': 'electrode_group_name',
                         'location': "implant_location",
@@ -85,30 +107,18 @@ def get_good_units_df() -> pl.DataFrame:
                     .select('session_id', 'electrode_group_name', 'implant_location')
             ),
             on=('session_id', 'electrode_group_name'),
-            how="full",
         )
-    )    
-    logger.info(f"Fetched {len(location_df)} good units")
-    return location_df
+        .join(
+            other=get_ccf_structure_tree_lf(),
+            right_on='acronym',
+            left_on='location',
+        )
+    ).collect()
+    logger.info(f"Fetched {len(good_units)} good units")
+    return good_units
 
 
 DataFrameOrLazyFrame = TypeVar("DataFrameOrLazyFrame", pl.DataFrame, pl.LazyFrame)
-def apply_location_query(
-    df_or_lf: DataFrameOrLazyFrame,
-    search_term: str, 
-    search_type: Literal['starts_with', 'contains'] = 'starts_with',
-    case_sensitive: bool = True,
-) -> DataFrameOrLazyFrame:
-    
-    if not case_sensitive:
-        search_term = search_term.lower()
-        location_col = pl.col('location').str.to_lowercase()
-    else:
-        location_col = pl.col('location')
-    location_expr = getattr(location_col.str, search_type)(search_term)
-    
-    df_or_lf = df_or_lf.filter(location_expr)
-    return df_or_lf
 
 def apply_unit_count_group_by(
     df_or_lf: DataFrameOrLazyFrame,
@@ -124,7 +134,7 @@ def apply_unit_count_group_by(
             pl.col('structure').first(),
             pl.col('subject_id').first(),
             pl.col('date').first(),
-            pl.col('unit_id').explode().alias('unit_ids'),
+            pl.col('unit_id').alias('unit_ids'),
             pl.col('implant_location').first(),
             pl.col('electrode_group_name').first(),
         ])
@@ -136,19 +146,24 @@ def get_unit_location_query_df(
     search_type: Literal['starts_with', 'contains'] = 'starts_with',
     case_sensitive: bool = True,
 ) -> pl.DataFrame:
-    df = (
-        apply_location_query(
-            get_good_units_df(),
-            search_term=search_term,
-            search_type=search_type,
-            case_sensitive=case_sensitive,
-        )
+    
+    if not case_sensitive:
+        search_term = search_term.lower()
+        location_col = pl.col('location').str.to_lowercase()
+    else:
+        location_col = pl.col('location')
+    location_expr = getattr(location_col.str, search_type)(search_term)
+    
+    units = (
+        get_good_units_df()
+        .lazy()
+        .filter(location_expr)
         .sort('date', "location")
-    )
-    logger.info(f"Found {len(df)} areas across {df['session_id'].drop_nulls().n_unique()} sessions: location.{search_type}({search_term}, {case_sensitive=})")
-    return df
+    ).collect()
+    logger.info(f"Filtered on area, found {len(units['location'].unique())} locations across {len(units['session_id'].unique())} sessions: location.{search_type}({search_term}, {case_sensitive=})")
+    return units
 
-def get_ccf_location_query_lazyframe(
+def get_ccf_location_query_lf(
     search_term: str,
     search_type: Literal['starts_with', 'contains'] = 'starts_with',
     case_sensitive: bool = True,
@@ -164,7 +179,7 @@ def get_ccf_location_query_lazyframe(
             logger.warning(f"Multiple implant locations found: {_locations}")
         implant_location = _locations[0]
     
-    query_df = get_unit_location_query_df(
+    queried_units = get_unit_location_query_df(
         search_term=search_term,
         search_type=search_type,
         case_sensitive=case_sensitive,
@@ -175,8 +190,8 @@ def get_ccf_location_query_lazyframe(
         join_on.extend(["ccf_ap", "ccf_dv", "ccf_ml"])
     join_on = tuple(join_on)    # type: ignore
 
-    electrodes_lf = (
-        get_component_lazyframe('electrodes')
+    locations = (
+        get_component_lf('electrodes')
         .rename({
             'x': 'ccf_ap',
             'y': 'ccf_dv',
@@ -185,7 +200,7 @@ def get_ccf_location_query_lazyframe(
         })
         .join(
             other=(
-                get_component_lazyframe('electrode_groups')
+                get_component_lf('electrode_groups')
                     .rename({
                         'name': 'electrode_group_name',
                         'location': 'implant_location',
@@ -195,14 +210,10 @@ def get_ccf_location_query_lazyframe(
             on=('session_id', 'electrode_group_name'),
         )
         .join(
-            other=query_df.lazy(),
+            other=queried_units.lazy(),
             on=join_on,  
-            how="semi", # only keep rows in left table (electrodes) that have match in right table (ie selected units)
+            how="semi", # only keep rows in left table (electrodes) that have match in right table (ie position of queried units)
         ) 
-    )
-
-    return (
-        electrodes_lf
         .filter(
             pl.col('ccf_ap') > -1,
             pl.col('ccf_dv') > -1,
@@ -212,64 +223,41 @@ def get_ccf_location_query_lazyframe(
         .select('session_id', 'electrode_group_name', 'implant_location', 'ccf_ml', 'ccf_ap', 'ccf_dv', 'location', 'structure')
         .join(
             other=(
-                get_ccf_structure_tree_lazyframe()
+                get_ccf_structure_tree_lf()
                 .select('acronym', pl.selectors.starts_with("color_"))
             ),
             right_on='acronym',
             left_on='location',
         )  
     )
-    
-@pn.cache
-def get_ccf_structure_tree_lazyframe() -> pl.LazyFrame:
-    return (
-        pl.scan_csv('//allen/programs/mindscope/workgroups/np-behavior/ccf_structure_tree_2017.csv')
-        .with_columns(
-            color_hex_int=pl.col('color_hex_triplet').str.to_integer(base=16),
-            color_hex_str=pl.lit('0x') + pl.col('color_hex_triplet'),
-        )
-        .with_columns(
-            r=pl.col('color_hex_triplet').str.slice(0, 2).str.to_integer(base=16).mul(1/255),
-            g=pl.col('color_hex_triplet').str.slice(2, 2).str.to_integer(base=16).mul(1/255),
-            b=pl.col('color_hex_triplet').str.slice(4, 2).str.to_integer(base=16).mul(1/255),
-        )
-        .with_columns(
-            color_rgb=pl.concat_list('r', 'g', 'b'),
-        )
-        .drop('r', 'g', 'b')
-    )
+    approx_n_unique_sessions = len(locations.select(pl.col('session_id').approx_n_unique()).collect())
+    approx_n_unique_locations = len(locations.select(pl.col('location').approx_n_unique()).collect())
+    logger.info(f"Filtered on area, found approx {approx_n_unique_locations} locations across {approx_n_unique_sessions} sessions: location.{search_type}({search_term}, {case_sensitive=}, {implant_location=}, {whole_probe=})")
+    return locations
 
 def plot_unit_locations_bar(
     search_term: str, 
     search_type: Literal['starts_with', 'contains'] = 'starts_with',
     case_sensitive: bool = True,
     group_by: Literal['session_id', 'subject_id'] = 'subject_id',
-) -> pn.pane.Plotly | None:
+) -> pn.pane.Plotly:
     
     if not search_term:
         return pn.pane.Plotly(None)
 
-    df = apply_unit_count_group_by(get_unit_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive))
-    
-    s = df['structure'].drop_nulls().unique()
-    if len(s) > 1:
-        logger.info(f"Multiple structures found: {list(s)}")
-        structure = s.to_list()
-    elif len(s) == 0:
-        logger.warning("No structures found")
-        structure = []
-    else:
-        structure = s[0]
+    grouped_units = apply_unit_count_group_by(
+        get_unit_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive)
+        )
     
     fig = px.bar(
-        df.cast({"subject_id": str}),       # make subject column str so we don't have big gaps on x-axis
+        grouped_units.cast({"subject_id": str}),       # make subject column str so we don't have big gaps on x-axis
         x=group_by, 
         y="location_count", 
         color="location", 
-        category_orders={"location": df['location'].unique().sort()},   # sort entries in legend
+        category_orders={"location": grouped_units['location'].unique().sort()},   # sort entries in legend
         labels={'location_count': 'units'}, 
         hover_data="session_id", 
-        title=f"breakdown of good units ({sum(df['location_count'])}) in good sessions ({df['session_id'].drop_nulls().n_unique()})", 
+        title=f"breakdown of good units ({sum(grouped_units['location_count'])}) in good sessions ({grouped_units['session_id'].drop_nulls().n_unique()})", 
     ) 
     fig.update_layout(
         autosize=True,
@@ -282,30 +270,46 @@ def plot_co_recorded_structures_bar(
     search_type: Literal['starts_with', 'contains'] = 'starts_with',
     case_sensitive: bool = True,
 ) -> pn.pane.Plotly:
-    query_df = get_unit_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive)
-    lf = (
+    queried_units = (
+        get_unit_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive)
+        )
+    other_units = (
         apply_unit_count_group_by(get_good_units_df())
         .lazy()
         .filter(
-            pl.col('session_id').is_in(query_df['session_id'].unique())
+            pl.col('session_id').is_in(queried_units['session_id'])
         )
         .explode('unit_ids')
         .rename({'unit_ids': 'unit_id'})
         .filter(
-            pl.col('unit_id').is_in(query_df['unit_ids'].explode().unique()).not_()
+            ~pl.col('unit_id').is_in(queried_units['unit_id'])
         )
+        # .pipe(
+        #     lambda df: df.join(
+        #         other=(
+        #             df
+        #             .group_by('structure')
+        #             .agg(
+        #                 pl.col('structure').count().alias('total_structure_count')
+        #                 )
+        #         ),
+        #         on='structure',
+        #     )
+        # )
+        #? supposed to link to operations below, but doesn't work
     )
 
-    df = (
-        lf
+    other_units = (
+        other_units
         .group_by(pl.col('structure', 'session_id')).agg([
             pl.col('unit_id').count().alias('unit_count'), 
         ])
         .join(
-            other=lf.group_by(pl.col('structure')).agg(pl.col('structure').count().alias('total_structure_count')),
+            other_units.group_by(pl.col('structure')).agg(pl.col('structure').count().alias('total_structure_count')),
             on='structure',
         )
-        .group_by('structure').agg(
+        .group_by('structure')
+        .agg(
             [   
                 pl.col('session_id'),
                 pl.col('unit_count'),
@@ -318,7 +322,7 @@ def plot_co_recorded_structures_bar(
     ).collect()
     
     fig = px.bar(
-        df,
+        other_units,
         x="structure", 
         y="unit_count",
         hover_data="session_id",
@@ -337,19 +341,24 @@ def table_holes_to_hit_areas(
     search_type: Literal['starts_with', 'contains'] = 'starts_with',
     case_sensitive: bool = True,
 ) -> pn.pane.Plotly:
-    df = get_unit_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive)
+    insertions: pl.DataFrame = (
+        get_unit_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive)
+        .group_by('session_id', 'electrode_group_name')
+        .agg([
+            pl.col('implant_location').first().alias("implant hole")
+        ])
+        .get_column('implant hole')
+        .value_counts(sort=True, name="n insertions")
+    )
     return pn.widgets.Tabulator(
-        df['implant_location'].value_counts(sort=True).to_pandas(),
+        value=insertions.to_pandas(),
         disabled=True,
         selectable=1,
         show_index=False,
-        page_size=10,
-        pagination='local',
         theme="modern",
+        # page_size=10,
+        # pagination='local',
     )
-
-# scene = brainrender.Scene() # for reuse
-# allen_atlas = iblatlas.atlas.AllenAtlas()
 
 @pn.cache
 def get_ccf_scene() -> brainrender.Scene:
@@ -370,19 +379,15 @@ def plot_ccf_locations_3d(
     
     whole_probe = False
     
-    query_df = get_unit_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive)
-    ccf_df = get_ccf_location_query_lazyframe(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive, implant_location=implant_location, whole_probe=whole_probe).collect()
-    logger.info(
-        f"Found {len(ccf_df)} {'electrode' if whole_probe else 'unit'} locations "
-        f"from {ccf_df['session_id'].drop_nulls().n_unique()} sessions: "
-        f"location.{search_type}({search_term}, {case_sensitive=}, {implant_location=}, {whole_probe=})")
+    queried_units = get_unit_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive)
+    ccf_locations = get_ccf_location_query_lf(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive, implant_location=implant_location, whole_probe=whole_probe)
     
     scene = get_ccf_scene()     
     
     logger.info(f"Removing {len(scene.actors[1:])} actors from 3D scene")
     scene.remove(*scene.actors[1:]) # remove all actors except root-brain region
-    if search_term: # if search_term is empty, areas will be every area recorded, which will be too many
-        regions = query_df['location'].drop_nulls().unique().to_list()
+    if search_term: # if search_term is empty, regions will be every area recorded, which will be too many
+        regions = queried_units['location'].drop_nulls().unique().to_list()
         logger.info(f"Adding {len(regions)} brain regions to 3D scene")
         for region in regions:
             scene.add_brain_region(
@@ -390,19 +395,20 @@ def plot_ccf_locations_3d(
                 hemisphere='left', 
                 alpha=0.1,
             )
-    
+
+        n = 5 if whole_probe else 1
         points = (
-            ccf_df
+            ccf_locations
             .sort('session_id', 'electrode_group_name', 'ccf_dv')
-            .gather_every(5 if whole_probe else 1)
-        )
-        logger.info(f"Adding {len(points)} {'electrode' if whole_probe else 'unit'} points to 3D scene")
+            .gather_every(n)
+        ).collect()
+        logger.info(f"Adding {len(points)} {'electrode' if whole_probe else 'unit'} points to 3D scene (gathered every {n} rows)")
         track_points = brainrender.actors.Points(
             points.select('ccf_dv', 'ccf_ap', 'ccf_ml').to_numpy(),
             radius=15,
             res=1,
             # colors='0x000000',
-            colors=points['color_hex_str'].to_list(),
+            colors=points['color_hex_str'].to_list(), #! this is not working
             alpha=1,
         )
         scene.add(track_points)
@@ -424,11 +430,10 @@ def plot_ccf_locations_3d(
     #     ren.AddActor(actor)
     # ren.SetBackground(1, 1, 1)
     return pn.pane.VTK(scene.plotter.window, width=500, height=500, orientation_widget=True, interactive_orientation_widget=True) 
-    return pn.pane.VTK(renWin, width=500, height=500)
 
     # scene = brainrender.Scene()
     # scene = brainrender.scene.Scene()
-    # for area in query_df['location'].unique():
+    # for area in queried_units['location'].unique():
     #     scene.add_brain_region(area, hemisphere='left', alpha=0.3)
     
     # track_points = brainrender.actors.Points(
@@ -478,8 +483,8 @@ def plot_ccf_locations_ibl(
     implant_location: str | list[str] | None = None,
     whole_probe: bool = False,
 ) -> pn.pane.Matplotlib:
-    query_df = get_unit_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive)
-    ccf_df = get_ccf_location_query_lazyframe(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive).collect()
+    queried_units = get_unit_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive)
+    ccf_df = get_ccf_location_query_lf(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive).collect()
     
     ADJUST_X = ADJUST_Y = -5000 #! adjust for brain-globe heatmap origin at center (5000 is not correct)
     
@@ -487,8 +492,8 @@ def plot_ccf_locations_ibl(
     depth_axis = {"frontal": "ccf_ap", "horizontal": "ccf_dv", "sagittal":  "ccf_ml"}
     for ax, plane in zip(axes, depth_axis.keys()):
         iblatlas.plots.plot_scalar_on_slice(
-            regions=query_df['location'].unique().to_numpy(),
-            values=np.full(len(query_df['location'].unique()), 0.1),
+            regions=queried_units['location'].unique().to_numpy(),
+            values=np.full(len(queried_units['location'].unique()), 0.1),
             slice='top' if plane == 'frontal' else plane,
             # coord=ccf_df[depth_axis[plane]].top_k(20).median() if plane != 'frontal' else -1000,
             hemisphere="left",
@@ -527,8 +532,8 @@ def plot_ccf_locations_brainglobe(
     implant_location: str | list[str] | None = None,
     whole_probe: bool = False,
 ) -> pn.pane.Matplotlib:
-    query_df = get_unit_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive)
-    ccf_df = get_ccf_location_query_lazyframe(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive).collect()
+    queried_units = get_unit_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive)
+    ccf_df = get_ccf_location_query_lf(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive).collect()
     
     ADJUST_X = ADJUST_Y = -5000 #! adjust for brain-globe heatmap origin at center (5000 is not correct)
     
@@ -536,7 +541,7 @@ def plot_ccf_locations_brainglobe(
     depth_axis = {"frontal": "ccf_ap", "horizontal": "ccf_dv", "sagittal":  "ccf_ml"}
     for ax, plane in zip(axes, depth_axis.keys()):
         heatmap = brainglobe_heatmap.Heatmap(
-            values={area: 0 for area in query_df['location'].unique().to_list() if area},
+            values={area: 0 for area in queried_units['location'].unique().to_list() if area},
             orientation=plane,
             hemisphere="left",
             position=ccf_df[depth_axis[plane]].top_k(20).median() + 500, 
@@ -577,7 +582,6 @@ def plot_ccf_locations_brainglobe(
     return pn.pane.Matplotlib(fig, tight=True)
 
 
-# add a dropdown selector for the search type and a text input for the search term
 search_type_input = pn.widgets.Select(name='Search type', options=['starts_with', 'contains'], value='starts_with')
 search_term_input = pn.widgets.TextInput(name='Search location', value='AUD')
 search_case_sensitive_input = pn.widgets.Checkbox(name='Case sensitive', value=False)
@@ -593,12 +597,10 @@ bound_plot_ccf_locations = pn.bind(plot_ccf_locations_3d, **search_input, whole_
 #TODO bind ccf_locations with bound_table_holes_to_hit_areas().selected_dataframe['implant_location'].values
 
 # bottom row of less-important plots
-bottom_row = pn.Row(bound_plot_co_recorded_structures_bar, bound_plot_ccf_locations, bound_table_holes_to_hit_areas)
+bottom_row = pn.Row(bound_plot_co_recorded_structures_bar, bound_table_holes_to_hit_areas)
 
 # column of plots   
 column = pn.Column(bound_plot_unit_locations_bar, bottom_row)
-
-bound_plot_ccf_locations()
 
 pn.template.MaterialTemplate(
     site="Dynamic Routing dashboard",
@@ -607,3 +609,14 @@ pn.template.MaterialTemplate(
     main=[column],
 ).servable()
 
+if __name__ == "__main__":
+    kwargs = dict(search_term='AUD', search_type='starts_with', case_sensitive=False)
+    df = get_good_units_df()
+    print(len(df))
+    print(df.columns)
+    df = get_unit_location_query_df(**kwargs).collect()
+    print(len(df))
+    print(df.columns)
+    df = get_ccf_location_query_lf(**kwargs).collect()
+    print(len(df))
+    print(df.columns)
