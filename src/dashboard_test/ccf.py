@@ -1,7 +1,7 @@
 import functools
 import logging
 import tempfile
-from typing import Iterable, Literal
+from typing import Iterable, Literal, TypeVar
 import nrrd 
 import numpy as np
 import numpy.typing as npt
@@ -19,7 +19,7 @@ def get_ccf_volume() -> npt.NDArray:
     
     """
 
-    isilon_path = upath.UPath("//allen/programs/mindscope/workgroups/np-behavior/annotation_25.nrrd")
+    isilon_path = upath.UPath("//allen/programs/mindscoEpe/workgroups/np-behavior/annotation_25.nrrd")
     cloud_path = upath.UPath("https://download.alleninstitute.org/informatics-archive/current-release/mouse_ccf/annotation/ccf_2017/annotation_25.nrrd")
     
     path = isilon_path if isilon_path.exists() else cloud_path
@@ -77,25 +77,75 @@ def get_ccf_structure_info(acronym: str) -> dict:
         logger.warning(f"Multiple areas found: {results['acronym'].to_list()}. Using the first one")
     return results[0].limit(1).to_dicts()[0]
 
-def get_children_in_volume(acronym: str, known_children: tuple[str, ...] | None = None) -> list[str]:
+
+def get_ccf_immediate_children_ids(acronym: str) -> set[int]:
     """
-    >>> get_children_in_volume('MOs')
-    
+    >>> ids = get_ccf_immediate_children_ids('MOs')
+    >>> sorted(convert_ccf_acronyms_or_ids(ids))
+    ['MOs1', 'MOs2/3', 'MOs5', 'MOs6a', 'MOs6b']
     """
-    children = list(known_children) or []
-    children.append(
+    return set(
         get_ccf_structure_tree_df()
         .filter(pl.col('parent_structure_id') == get_ccf_structure_info(acronym)['id'])
-        .get_column('acronym')
-        .to_list()
+        .get_column('id')
     )
-    if all(child in get_areas_in_volume() for child in children):
-        return children
-    for child in children:
-        if child not in get_areas_in_volume():
-            children.append(get_children_in_volume(child, children))
-    
-    
+
+def get_ccf_children_ids_in_volume(acronym: str) -> set[int]:
+    """
+    >>> ids = get_ccf_children_ids_in_volume('MOs')
+    >>> sorted(convert_ccf_acronyms_or_ids(ids))
+    ['MOs1', 'MOs2/3', 'MOs5', 'MOs6a', 'MOs6b']
+    """
+    children = get_ccf_immediate_children_ids(acronym)
+    while not children.issubset(get_ids_in_volume()):
+        children_not_in_volume = children - get_ids_in_volume()
+        while children_not_in_volume:
+            parent = children_not_in_volume.pop()
+            children.remove(parent)
+            children.update(get_ccf_immediate_children_ids(parent))
+    return children
+
+
+@functools.cache
+def ccf_acronym_to_id() -> dict[str, int]:
+    """
+    >>> ccf_acronym_to_id()['MOs']
+    993
+    >>> ccf_acronym_to_id()['VISp']
+    385
+    """
+    return dict(zip(*[get_ccf_structure_tree_df().get_column(col) for col in ('acronym', 'id')]))
+
+@functools.cache
+def ccf_id_to_acronym() -> dict[int, str]:
+    """
+    >>> ccf_id_to_acronym()[993]
+    'MOs'
+    >>> ccf_id_to_acronym()[385]
+    'VISp'
+    """
+    return dict(zip(*[get_ccf_structure_tree_df().get_column(col) for col in ('id', 'acronym')]))
+
+from typing import TypeVar, Iterable
+
+T = TypeVar('T', int, str, contravariant=True)
+def convert_ccf_acronyms_or_ids(acronym_or_id: T | Iterable[T]) -> T | tuple[T]:
+    """
+    >>> convert_ccf_acronyms_or_ids('MOs')
+    993
+    >>> convert_ccf_acronyms_or_ids(993)
+    'MOs'
+    >>> convert_ccf_acronyms_or_ids(['MOs', 'VISp'])
+    (993, 385)
+    >>> convert_ccf_acronyms_or_ids([993, 385])
+    ('MOs', 'VISp')
+    """
+    if isinstance(acronym_or_id, str):
+        return ccf_acronym_to_id()[acronym_or_id]
+    if isinstance(acronym_or_id, int):
+        return ccf_id_to_acronym()[acronym_or_id]
+    return tuple(convert_ccf_acronyms_or_ids(a) for a in acronym_or_id)
+
 def get_ccf_volume_binary_mask(ccf_acronym: str | None = None) -> npt.NDArray:
     """
     # >>> volume = get_ccf_volume_binary_mask('MOs')
@@ -107,22 +157,24 @@ def get_ccf_volume_binary_mask(ccf_acronym: str | None = None) -> npt.NDArray:
         logger.warning('No acronym provided, returning mask for the whole volume')
         return get_ccf_volume() > 0
     ccf_id: int = get_ccf_structure_info(ccf_acronym)['id']
-    if ccf_acronym in get_areas_in_volume():
+    if ccf_acronym in get_acronyms_in_volume():
         return get_ccf_volume() == ccf_id
     # call recursively on children and sum them up
-    return np.sum([get_ccf_volume_binary_mask(child) for child in get_children_in_volume(ccf_acronym)], axis=0)
-
+    return np.sum([get_ccf_volume_binary_mask(child) for child in get_ids_in_volume(ccf_acronym)], axis=0)
 
 
 @functools.cache
-def get_areas_in_volume() -> list[str]:
+def get_ids_in_volume() -> set[int]:
+    return set(np.unique(get_ccf_volume()))
+
+@functools.cache
+def get_acronyms_in_volume() -> set[str]:
     """Reverse lookup on integers in ccf volume to get their corresponding acronyms
     
-    >>> areas = get_areas_in_volume()
-    >>> areas[0]
-    'root'
+    >>> areas = get_acronyms_in_volume()
+    >>> assert areas
     """
-    return get_ccf_structure_tree_df().filter(pl.col('id').is_in(np.unique(get_ccf_volume())))['acronym'].to_list()
+    return set(get_ccf_structure_tree_df().filter(pl.col('id').is_in(get_ids_in_volume()))['acronym'])
 
 
 def get_ccf_projection(
@@ -162,7 +214,7 @@ def get_ccf_projection(
         rgb = get_ccf_structure_info(acronym)['color_rgb']
     else:
         rgb = [.5] * 3
-    rgba: np.ndarray[functools.Any, np.dtype[functools.Any]] = np.array(rgb + [1])
+    rgba = np.array(rgb + [max(0, min(1, alpha))])
     return np.stack([slice_image] * 4, axis=-1) * rgba
 
 
@@ -170,7 +222,7 @@ if __name__ == '__main__':
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     # ax = plt.imshow(
-    #     get_ccf_projection('CTX', axis='horizontal')
+    #     get_ccf_projection('MOs', axis='horizontal')
     # )
     # plt.show()
     import doctest
