@@ -1,28 +1,34 @@
 import functools
 import logging
 import tempfile
+import time
 from typing import Iterable, Literal, TypeVar
-import nrrd 
+
+import nrrd
+import numba
 import numpy as np
 import numpy.typing as npt
-import upath 
 import polars as pl
-import matplotlib.pyplot as plt
+import upath
 
 logger = logging.getLogger(__name__)
 
 @functools.cache
-def get_ccf_volume() -> npt.NDArray:
+def get_ccf_volume(left_hemisphere = True, right_hemisphere=False) -> npt.NDArray:
     """
-    From ibl Atlas
-    >>> volume = get_ccf_volume()
+    array[ap, ml, dv]
     
+    From iblatlas
+    
+    >>> volume = get_ccf_volume()
+    >>> assert volume.any()
     """
 
-    isilon_path = upath.UPath("//allen/programs/mindscoEpe/workgroups/np-behavior/annotation_25.nrrd")
+    local_path = upath.UPath("//allen/programs/mindscoEpe/workgroups/np-behavior/annotation_25.nrrd")
+    local_path = upath.UPath("C:/Users/BEN~1.HAR/AppData/Local/Temp/tmprrkdzln2/annotation_25.nrrd")
     cloud_path = upath.UPath("https://download.alleninstitute.org/informatics-archive/current-release/mouse_ccf/annotation/ccf_2017/annotation_25.nrrd")
     
-    path = isilon_path if isilon_path.exists() else cloud_path
+    path = local_path if local_path.exists() else cloud_path
     if path.suffix not in (supported := ('.nrrd', '.npz')):
         raise ValueError(
             f'{path.suffix} files not supported, must be one of {supported}')
@@ -41,13 +47,18 @@ def get_ccf_volume() -> npt.NDArray:
         volume = np.transpose(volume, (2, 0, 1))  # image[iap, iml, idv]
     elif path.suffix == '.npz':
         volume = np.load(path)['arr_0']
+    if left_hemisphere and not right_hemisphere:
+        return volume[:, :volume.shape[1]//2, :]
+    if right_hemisphere and not left_hemisphere:
+        return volume[:, volume.shape[1]//2:, :]
     return volume
 
 @functools.cache
 def get_ccf_structure_tree_df() -> pl.DataFrame:
-    isilon_path = upath.UPath('//allen/programs/mindscope/workgroups/np-behavior/ccf_structure_tree_2017.csv')
-    github_path = upath.UPath('https://raw.githubusercontent.com/cortex-lab/allenCCF/master/structure_tree_safe_2017.csv')
-    path = isilon_path if isilon_path.exists() else github_path
+    local_path = upath.UPath('//allen/programs/mindscope/workgroups/np-behavior/ccf_structure_tree_2017.csv')
+    cloud_path = upath.UPath('https://raw.githubusercontent.com/cortex-lab/allenCCF/master/structure_tree_safe_2017.csv')
+    path = local_path if local_path.exists() else cloud_path
+    logging.info(f"Using CCF structure tree from {path.as_posix()}")
     return (
         pl.scan_csv(path.as_posix())
         .with_columns(
@@ -65,71 +76,90 @@ def get_ccf_structure_tree_df() -> pl.DataFrame:
         .drop('r', 'g', 'b')
     ).collect()
     
-def get_ccf_structure_info(acronym: str) -> dict:
+def get_ccf_structure_info(ccf_acronym_or_id: str | int) -> dict:
     """
     >>> get_ccf_structure_info('MOs')
     {'id': 993, 'atlas_id': 831, 'name': 'Secondary motor area', 'acronym': 'MOs', 'st_level': None, 'ontology_id': 1, 'hemisphere_id': 3, 'weight': 8690, 'parent_structure_id': 500, 'depth': 7, 'graph_id': 1, 'graph_order': 24, 'structure_id_path': '/997/8/567/688/695/315/500/993/', 'color_hex_triplet': '1F9D5A', 'neuro_name_structure_id': None, 'neuro_name_structure_id_path': None, 'failed': 'f', 'sphinx_id': 25, 'structure_name_facet': 1043755260, 'failed_facet': 734881840, 'safe_name': 'Secondary motor area', 'color_hex_int': 2071898, 'color_hex_str': '0x1F9D5A', 'color_rgb': [0.12156862745098039, 0.615686274509804, 0.3529411764705882]}
     """
-    results = get_ccf_structure_tree_df().filter(pl.col('acronym') == acronym)
+    if not isinstance(ccf_acronym_or_id, int):
+        ccf_id: int = convert_ccf_acronyms_or_ids(ccf_acronym_or_id)
+    else:
+        ccf_id = ccf_acronym_or_id
+    results = get_ccf_structure_tree_df().filter(pl.col('id') == ccf_id)
     if len(results) == 0:
-        raise ValueError(f'No area found with acronym {acronym}')
+        raise ValueError(f'No area found with acronym {convert_ccf_acronyms_or_ids(ccf_id)}')
     if len(results) > 1:
         logger.warning(f"Multiple areas found: {results['acronym'].to_list()}. Using the first one")
     return results[0].limit(1).to_dicts()[0]
 
 
-def get_ccf_immediate_children_ids(acronym: str) -> set[int]:
+def get_ccf_immediate_children_ids(ccf_acronym_or_id: str | int) -> set[int]:
     """
     >>> ids = get_ccf_immediate_children_ids('MOs')
     >>> sorted(convert_ccf_acronyms_or_ids(ids))
     ['MOs1', 'MOs2/3', 'MOs5', 'MOs6a', 'MOs6b']
     """
+    if not isinstance(ccf_acronym_or_id, int):
+        ccf_id: int = convert_ccf_acronyms_or_ids(ccf_acronym_or_id)
+    else:
+        ccf_id = ccf_acronym_or_id
     return set(
         get_ccf_structure_tree_df()
-        .filter(pl.col('parent_structure_id') == get_ccf_structure_info(acronym)['id'])
+        .filter(pl.col('parent_structure_id') == get_ccf_structure_info(ccf_id)['id'])
         .get_column('id')
     )
 
-def get_ccf_children_ids_in_volume(acronym: str) -> set[int]:
+def get_ccf_children_ids_in_volume(ccf_acronym_or_id: str | int | None) -> set[int]:
     """
     >>> ids = get_ccf_children_ids_in_volume('MOs')
     >>> sorted(convert_ccf_acronyms_or_ids(ids))
     ['MOs1', 'MOs2/3', 'MOs5', 'MOs6a', 'MOs6b']
     """
-    children = get_ccf_immediate_children_ids(acronym)
+    if ccf_acronym_or_id is None or ccf_acronym_or_id == '':
+        logger.info('No acronym provided, returning IDs for all non-zero areas')
+        return get_ids_in_volume()
+    if not isinstance(ccf_acronym_or_id, int):
+        ccf_id: int = convert_ccf_acronyms_or_ids(ccf_acronym_or_id)
+    else:
+        ccf_id = ccf_acronym_or_id
+    children = get_ccf_immediate_children_ids(ccf_id)
     while not children.issubset(get_ids_in_volume()):
         children_not_in_volume = children - get_ids_in_volume()
         while children_not_in_volume:
             parent = children_not_in_volume.pop()
             children.remove(parent)
             children.update(get_ccf_immediate_children_ids(parent))
+    logger.info(f"Found {len(children)} children for {convert_ccf_acronyms_or_ids(ccf_id)}")
     return children
 
 
 @functools.cache
-def ccf_acronym_to_id() -> dict[str, int]:
+def _ccf_acronym_to_id() -> dict[str, int]:
     """
-    >>> ccf_acronym_to_id()['MOs']
+    Use convert_ccf_acronyms_or_ids()
+    
+    >>> _ccf_acronym_to_id()['MOs']
     993
-    >>> ccf_acronym_to_id()['VISp']
+    >>> _ccf_acronym_to_id()['VISp']
     385
     """
     return dict(zip(*[get_ccf_structure_tree_df().get_column(col) for col in ('acronym', 'id')]))
 
 @functools.cache
-def ccf_id_to_acronym() -> dict[int, str]:
+def _ccf_id_to_acronym() -> dict[int, str]:
     """
-    >>> ccf_id_to_acronym()[993]
+    Use convert_ccf_acronyms_or_ids()
+    
+    >>> _ccf_id_to_acronym()[993]
     'MOs'
-    >>> ccf_id_to_acronym()[385]
+    >>> _ccf_id_to_acronym()[385]
     'VISp'
     """
     return dict(zip(*[get_ccf_structure_tree_df().get_column(col) for col in ('id', 'acronym')]))
 
-from typing import TypeVar, Iterable
 
 T = TypeVar('T', int, str, contravariant=True)
-def convert_ccf_acronyms_or_ids(acronym_or_id: T | Iterable[T]) -> T | tuple[T]:
+def convert_ccf_acronyms_or_ids(ccf_acronym_or_id: T | Iterable[T]) -> T | tuple[T]:
     """
     >>> convert_ccf_acronyms_or_ids('MOs')
     993
@@ -140,28 +170,67 @@ def convert_ccf_acronyms_or_ids(acronym_or_id: T | Iterable[T]) -> T | tuple[T]:
     >>> convert_ccf_acronyms_or_ids([993, 385])
     ('MOs', 'VISp')
     """
-    if isinstance(acronym_or_id, str):
-        return ccf_acronym_to_id()[acronym_or_id]
-    if isinstance(acronym_or_id, int):
-        return ccf_id_to_acronym()[acronym_or_id]
-    return tuple(convert_ccf_acronyms_or_ids(a) for a in acronym_or_id)
+    if isinstance(ccf_acronym_or_id, str):
+        result = _ccf_acronym_to_id()[ccf_acronym_or_id]
+    elif isinstance(ccf_acronym_or_id, int):
+        result = _ccf_id_to_acronym()[ccf_acronym_or_id]
+    else: 
+        result = tuple(convert_ccf_acronyms_or_ids(a) for a in ccf_acronym_or_id)
+    logging.debug(f"Converted {ccf_acronym_or_id} to {result}")
+    return result
 
-def get_ccf_volume_binary_mask(ccf_acronym: str | None = None) -> npt.NDArray:
-    """
-    # >>> volume = get_ccf_volume_binary_mask('MOs')
-    # >>> assert volume.any()
-    # >>> volume = get_ccf_volume_binary_mask()
-    # >>> assert volume.any()
-    """
-    if not ccf_acronym:
-        logger.warning('No acronym provided, returning mask for the whole volume')
-        return get_ccf_volume() > 0
-    ccf_id: int = get_ccf_structure_info(ccf_acronym)['id']
-    if ccf_acronym in get_acronyms_in_volume():
-        return get_ccf_volume() == ccf_id
-    # call recursively on children and sum them up
-    return np.sum([get_ccf_volume_binary_mask(child) for child in get_ids_in_volume(ccf_acronym)], axis=0)
 
+
+@numba.jit(parallel=False)
+def isin_numba(volume: npt.NDArray[np.uint32], ids: set[int]) -> npt.NDArray[np.bool_]:
+    """
+    May be faster than np.isin for large arrays - about the same as isin with
+    'sort' for the 25 um volume
+    From:
+    https://stackoverflow.com/questions/62007409/is-there-method-faster-than-np-isin-for-large-array
+    """
+    shape_a: tuple[int, ...] = volume.shape
+    volume: npt.NDArray[np.uint32] = volume.ravel()
+    n: int = len(volume)
+    result: npt.NDArray[np.bool_] = np.full(n, False)
+    for i in numba.prange(n):
+        if volume[i] in ids:
+            result[i] = True
+    return result.reshape(shape_a)
+
+def get_ccf_volume_binary_mask(ccf_acronym_or_id: str | int | None = None) -> npt.NDArray:
+    """
+    >>> volume = get_ccf_volume_binary_mask('MOs')
+    >>> assert volume.any()
+    >>> volume = get_ccf_volume_binary_mask()
+    >>> assert volume.any()
+    """
+    if ccf_acronym_or_id is None or ccf_acronym_or_id == '':
+        logger.info('No acronym provided, returning mask for the whole volume')
+        for kind in ('gt', ):
+            t0 = time.time()
+            if kind == 'nonzero':
+                masked_volume = get_ccf_volume().nonzero()
+            else:
+                masked_volume = get_ccf_volume() > 0
+            logger.info(f"Masked volume with no ccf area fetched with {kind=!r} in {time.time() - t0:.2f}s")
+        return masked_volume
+    for kind in ('sort',): # ('table', 'sort', 'numba') 
+        ids = get_ccf_children_ids_in_volume(ccf_acronym_or_id)
+        if kind == 'numba':
+            s = ids
+        elif kind in ('table', 'sort'):
+            s = np.fromiter(ids, dtype=int)
+        else:
+            raise ValueError(f"Invalid kind {kind}")
+        v = get_ccf_volume()
+        t0 = time.time()
+        if kind == 'numba':
+            masked_volume = isin_numba(v, s)
+        else:
+            masked_volume = np.isin(v, s, kind=kind) # set must be converted to np.array for np.isin to work
+        logger.info(f"Masked volume found for {ccf_acronym_or_id} with {kind=!r} in {time.time() - t0:.2f}s")
+    return masked_volume
 
 @functools.cache
 def get_ids_in_volume() -> set[int]:
@@ -178,52 +247,100 @@ def get_acronyms_in_volume() -> set[str]:
 
 
 def get_ccf_projection(
-    acronym: str | None = None,
+    ccf_acronym_or_id: str | int | None = None,
     volume: npt.NDArray | None = None, 
-    axis: Literal['sagittal', 'coronal', 'horizontal'] = 'horizontal', 
+    projection: Literal['sagittal', 'coronal', 'horizontal'] = 'horizontal', 
     slice_center_index: int | None = None, 
-    thickness_indices: int = 500,
-    apply_color: bool = True,
-    alpha: float = 1,
+    thickness_indices: int | None = None,
+    with_color: bool = True,
+    with_opacity: bool = True,
+    normalize_rgb: bool = True,
 ) -> npt.NDArray:
     """
-    >>> slice = get_ccf_projection(axis='coronal') # no acronym returns all non-zero areas
-    >>> assert slice.any()
-    """
+    >>> projection_img = get_ccf_projection(axis='coronal') # no acronym returns all non-zero areas
+    >>> assert projection_img.any()
+    """    
     if volume is None:
-        volume = get_ccf_volume_binary_mask(acronym)
+        volume = get_ccf_volume_binary_mask(ccf_acronym_or_id)
+    axis_to_dim = {'ap': 0, 'ml': 1, 'dv': 2}
+    projection_to_axis = {'sagittal': 'ml', 'coronal': 'ap', 'horizontal': 'dv'}
+    projection_yx = {'sagittal': ('dv', 'ap'), 'coronal': ('dv', 'ml'), 'horizontal': ('ap', 'ml')}
 
-    axis_dim = {'sagittal': 0, 'coronal': 1, 'horizontal': 2}[axis]
-    if slice_center_index is None:
-        slice_center_index = volume.shape[axis_dim] // 2
+    depth_dim = axis_to_dim[projection_to_axis[projection]]
     
-    s = slice(
+    if slice_center_index is None:
+        slice_center_index = volume.shape[depth_dim] // 2
+    if thickness_indices is None:
+        thickness_indices = volume.shape[depth_dim]
+    slice_ = slice(
         max(round(slice_center_index - 0.5 * thickness_indices), 0),
-        min(round(slice_center_index + 0.5 * thickness_indices) + 1, volume.shape[axis_dim]),
+        min(round(slice_center_index + 0.5 * thickness_indices) + 1, volume.shape[depth_dim]),
         1,
     )
-    if axis == 'coronal':
-        slice_image = volume[s, :, :].any(axis=0)
-    elif axis == 'sagittal':
-        slice_image = volume[:, s, :].any(axis=1)
-    elif axis == 'horizontal':
-        slice_image = volume[:, :, s].any(axis=2)
-    if not apply_color:
-        return slice_image
-    if acronym:
-        rgb = get_ccf_structure_info(acronym)['color_rgb']
+    subvolume = volume[*[slice_ if dim == depth_dim else slice(None) for dim in range(volume.ndim)]]
+    if with_opacity:
+        density_projection = (p := subvolume.sum(axis=depth_dim)) / p.max()
     else:
+        density_projection = subvolume.sum(axis=depth_dim) > 0
+        
+    # flip image axes to match projection_xy
+    if tuple(k for k in axis_to_dim if axis_to_dim[k] != depth_dim) != projection_yx[projection]:
+        density_projection = np.transpose(density_projection, (1, 0))
+    
+    if not with_color:
+        logger.info(f'Returning binary_image.shape={density_projection.shape}')
+        return density_projection
+    
+    if ccf_acronym_or_id is None or ccf_acronym_or_id == '':
         rgb = [.5] * 3
-    rgba = np.array(rgb + [max(0, min(1, alpha))])
-    return np.stack([slice_image] * 4, axis=-1) * rgba
+    else:
+        rgb: list[float] = get_ccf_structure_info(ccf_acronym_or_id)['color_rgb']
+    rgb_image = rgb * np.stack([np.ones_like(density_projection)] * 3, axis=-1)
+    if not normalize_rgb:
+        rgb_image *= 255
+        
+    if not with_opacity:
+        logger.info(f'Returning {rgb_image.shape=}')
+        return rgb_image
+    
+    rgba_image = np.concatenate((rgb_image, density_projection[:, :, np.newaxis]), axis=-1)
+    logger.info(f'Returning {rgba_image.shape=}')
+    return rgba_image
 
 
 if __name__ == '__main__':
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-    # ax = plt.imshow(
-    #     get_ccf_projection('MOs', axis='horizontal')
-    # )
+    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s | %(name)s | %(levelname)s | %(funcName)s | %(message)s', datefmt='%d-%b-%y %H:%M:%S')
+    logging.getLogger().setLevel(logging.DEBUG)
+
+    # import plotly.graph_objects as go
+    # volume = get_ccf_volume_binary_mask() 
+    # AP, ML, DV = np.mgrid[:10:10 * volume.shape[0], :10:10 * volume.shape[1], :10:10 * volume.shape[2]]
+    # fig = go.Figure(data=go.Volume(
+    #     x=ML.flatten(), y=AP.flatten(), z=DV.flatten(),
+    #     value=volume.flatten(),
+    #     isomin=0.2,
+    #     isomax=0.7,
+    #     opacity=0.2,
+    #     surface_count=21,
+    #     slices_z=dict(show=True, locations=[0.4]),
+    #     surface=dict(fill=0.5, pattern='odd'),
+    #     caps= dict(x_show=False, y_show=False, z_show=False), # no caps
+    #     ))
+
+    # fig.show()
+    
+    import matplotlib.pyplot as plt
+    for projection in ('sagittal', 'coronal', 'horizontal'):
+        plt.imshow(get_ccf_projection(projection=projection))
+        plt.imshow(get_ccf_projection('MOs', projection=projection))
+        plt.gcf().savefig(f'{projection}.png')
+        plt.close()
+    
+    # img = get_ccf_projection(projection='horizontal')
+    # plt.imshow(img)
     # plt.show()
-    import doctest
-    doctest.testmod()
+    # import plotly.express as px
+    # px.imshow(img[:, :, 0:3], zmax = 1).show()
+
+    # import doctest
+    # doctest.testmod()    
