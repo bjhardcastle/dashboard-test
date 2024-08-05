@@ -89,7 +89,7 @@ def get_good_units_df() -> pl.DataFrame:
             on=('session_id', 'electrode_group_name'),
         )
         .join(
-            other=dashboard_test.ccf.get_ccf_structure_tree_df(),
+            other=dashboard_test.ccf.get_ccf_structure_tree_df().lazy(),
             right_on='acronym',
             left_on='location',
         )
@@ -203,7 +203,7 @@ def get_ccf_location_query_lf(
         .select('session_id', 'electrode_group_name', 'implant_location', 'ccf_ml', 'ccf_ap', 'ccf_dv', 'location', 'structure')
         .join(
             other=(
-                dashboard_test.ccf.get_ccf_structure_tree_df()
+                dashboard_test.ccf.get_ccf_structure_tree_df().lazy()
                 .select('acronym', pl.selectors.starts_with("color_"))
             ),
             right_on='acronym',
