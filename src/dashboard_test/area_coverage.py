@@ -568,20 +568,27 @@ def plot_ccf_locations_allen(
     case_sensitive: bool = True,
     implant_location: str | list[str] | None = None,
     whole_probe: bool = False,
+    show_parent_brain_region: bool = False, # faster
 ) -> pn.pane.Matplotlib:
     
     queried_units = get_unit_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive)
     ccf_locations = (
         get_ccf_location_query_lf(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive, implant_location=implant_location, whole_probe=whole_probe)
     ).collect()
-    
+    if not search_term: # if search_term is empty, we just show the background brain volume
+        areas = []
+    if show_parent_brain_region or len(queried_units['location'].unique().to_list()) > 1:
+        areas = queried_units['structure'].unique().to_list()
+    else:
+        areas = queried_units['location'].unique().to_list()
+    logger.info(f"Adding {areas} to CCF image: {search_term=}, {show_parent_brain_region=}")
     fig, axes = plt.subplots(1, 2)
     depth_column = {"horizontal": "ccf_dv", "coronal": "ccf_ap", "sagittal":  "ccf_ml"}
     for ax, projection in zip(axes, depth_column.keys()):
         ax.imshow(dashboard_test.ccf.get_ccf_projection(projection=projection))
         xlims, ylims = ax.get_xlim(), ax.get_ylim()
-        for structure in queried_units['structure'].unique().to_list():
-            ax.imshow(dashboard_test.ccf.get_ccf_projection(structure, projection=projection, with_opacity=True))
+        for area in areas:
+            ax.imshow(dashboard_test.ccf.get_ccf_projection(area, projection=projection, with_opacity=True))
         scatter_df = (
             ccf_locations
             .select('ccf_ml', 'ccf_ap', 'ccf_dv')
@@ -607,16 +614,24 @@ def plot_ccf_locations_allen(
     return pn.pane.Matplotlib(fig, tight=True)
 
 search_type_input = pn.widgets.Select(name='Search type', options=['starts_with', 'contains'], value='starts_with')
-search_term_input = pn.widgets.TextInput(name='Search location', value='AUD')
+search_term_input = pn.widgets.TextInput(name='Search location', value='MOs', styles={'font-weight': 'bold'})
 search_case_sensitive_input = pn.widgets.Checkbox(name='Case sensitive', value=False)
 group_by_input = pn.widgets.Select(name='Group by', options=['session_id', 'subject_id'], value='subject_id')
-whole_probe_input = pn.widgets.Checkbox(name='Show whole probe track in brain images', value=False)
+select_implant_hole = pn.widgets.TextInput(name='Filter implant hole', placeholder='e.g. "2002 E2"')
+show_parent_brain_region = pn.widgets.Checkbox(name='Show parent structure in brain (faster)', value=False)
+whole_probe_input = pn.widgets.Checkbox(name='Show complete probe tracks in brain images', value=False)
 
 search_input = dict(search_term=search_term_input, search_type=search_type_input, case_sensitive=search_case_sensitive_input)
 bound_plot_unit_locations_bar = pn.bind(plot_unit_locations_bar, **search_input, group_by=group_by_input)
 bound_plot_co_recorded_structures_bar = pn.bind(plot_co_recorded_structures_bar, **search_input)
 bound_table_holes_to_hit_areas = pn.bind(table_holes_to_hit_areas, **search_input)
-bound_plot_ccf_locations = pn.bind(plot_ccf_locations_allen, **search_input, whole_probe=whole_probe_input)
+bound_plot_ccf_locations = pn.bind(
+    plot_ccf_locations_allen, 
+    **search_input, 
+    whole_probe=whole_probe_input,
+    implant_location=select_implant_hole,
+    show_parent_brain_region=show_parent_brain_region,    
+)
 
 #TODO bind ccf_locations with bound_table_holes_to_hit_areas().selected_dataframe['implant_location'].values
 
@@ -624,12 +639,23 @@ bound_plot_ccf_locations = pn.bind(plot_ccf_locations_allen, **search_input, who
 bottom_row = pn.Row(bound_table_holes_to_hit_areas, bound_plot_ccf_locations, bound_plot_co_recorded_structures_bar)
 
 # column of plots   
-column = pn.Column(bound_plot_unit_locations_bar,  bottom_row)
-
+column = pn.Column(
+    bound_plot_unit_locations_bar,  
+    bound_table_holes_to_hit_areas,
+)
+sidebar = pn.Column(
+    group_by_input,
+    search_type_input,
+    search_term_input,
+    search_case_sensitive_input,
+    select_implant_hole,
+    # show_parent_brain_region,
+    whole_probe_input,
+)
 pn.template.MaterialTemplate(
     site="Dynamic Routing dashboard",
     title=__file__.split('\\')[-1].split('.py')[0].replace('_', ' ').title(),
-    sidebar=[group_by_input, search_type_input, search_term_input, search_case_sensitive_input, whole_probe_input],
-    main=[column],
+    sidebar=[sidebar],
+    main=[pn.Row(column, pn.Column(bound_plot_ccf_locations, bound_plot_co_recorded_structures_bar))],
 ).servable()
 
