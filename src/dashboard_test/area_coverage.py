@@ -593,10 +593,9 @@ def plot_ccf_locations_allen(
         logger.info(f"Adding {scatter_df.shape=} points on {projection} image")
         ax.scatter(
             *scatter_array,
-            # c=ccf_df['color_rgb'],
             c='w',
             s=0.05,
-            alpha=0.8,
+            alpha=1,
             edgecolors=None,
         )
         ax.xaxis.set_visible(False)
