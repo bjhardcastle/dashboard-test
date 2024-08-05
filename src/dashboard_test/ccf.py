@@ -122,6 +122,8 @@ def get_ccf_children_ids_in_volume(ccf_acronym_or_id: str | int | None) -> set[i
         ccf_id: int = convert_ccf_acronyms_or_ids(ccf_acronym_or_id)
     else:
         ccf_id = ccf_acronym_or_id
+    if ccf_id in get_ids_in_volume():
+        return {ccf_id}
     children = get_ccf_immediate_children_ids(ccf_id)
     while not children.issubset(get_ids_in_volume()):
         children_not_in_volume = children - get_ids_in_volume()
@@ -203,6 +205,8 @@ def get_ccf_volume_binary_mask(ccf_acronym_or_id: str | int | None = None) -> np
     >>> volume = get_ccf_volume_binary_mask('MOs')
     >>> assert volume.any()
     >>> volume = get_ccf_volume_binary_mask()
+    >>> assert volume.any()
+    >>> volume = get_ccf_volume_binary_mask('CP')
     >>> assert volume.any()
     """
     if ccf_acronym_or_id is None or ccf_acronym_or_id == '':
