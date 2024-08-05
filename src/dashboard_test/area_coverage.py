@@ -619,7 +619,7 @@ def plot_ccf_locations_allen(
         for edge, spine in ax.spines.items():
             spine.set_visible(False)
     fig.tight_layout()
-    return pn.pane.Matplotlib(fig, tight=True)
+    return pn.pane.Matplotlib(fig, tight=True, format="svg", sizing_mode="stretch_width")
 
 search_type_input = pn.widgets.Select(name='Search type', options=['starts_with', 'contains'], value='starts_with')
 search_term_input = pn.widgets.TextInput(name='Search location', value='MOs', styles={'font-weight': 'bold'})
