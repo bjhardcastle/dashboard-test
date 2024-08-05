@@ -296,7 +296,7 @@ def get_ccf_projection(
         return density_projection
     
     if ccf_acronym_or_id is None or ccf_acronym_or_id == '':
-        rgb = [.5] * 3
+        rgb = [.6] * 3
     else:
         rgb: list[float] = get_ccf_structure_info(ccf_acronym_or_id)['color_rgb']
     rgb_image = rgb * np.stack([np.ones_like(density_projection)] * 3, axis=-1)
