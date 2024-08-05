@@ -643,9 +643,6 @@ bound_plot_ccf_locations = pn.bind(
 
 #TODO bind ccf_locations with bound_table_holes_to_hit_areas().selected_dataframe['implant_location'].values
 
-# bottom row of less-important plots
-bottom_row = pn.Row(bound_table_holes_to_hit_areas, bound_plot_ccf_locations, bound_plot_co_recorded_structures_bar)
-
 # column of plots   
 column = pn.Column(
     bound_plot_unit_locations_bar,  
