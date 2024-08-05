@@ -659,7 +659,7 @@ sidebar = pn.Column(
     whole_probe_input,
 )
 pn.template.MaterialTemplate(
-    site="Dynamic Routing dashboard",
+    site="DR dashboard",
     title=__file__.split('\\')[-1].split('.py')[0].replace('_', ' ').title(),
     sidebar=[sidebar],
     main=[pn.Row(column, pn.Column(bound_plot_ccf_locations, bound_plot_co_recorded_structures_bar))],
