@@ -261,7 +261,7 @@ def get_ccf_projection(
     normalize_rgb: bool = True,
 ) -> npt.NDArray:
     """
-    >>> projection_img = get_ccf_projection(axis='coronal') # no acronym returns all non-zero areas
+    >>> projection_img = get_ccf_projection() # no acronym returns all non-zero areas
     >>> assert projection_img.any()
     """    
     if volume is None:
