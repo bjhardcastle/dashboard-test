@@ -581,6 +581,7 @@ def plot_ccf_locations_allen(
     depth_column = {"horizontal": "ccf_dv", "coronal": "ccf_ap", "sagittal":  "ccf_ml"}
     for ax, projection in zip(axes, depth_column.keys()):
         ax.imshow(dashboard_test.ccf.get_ccf_projection(projection=projection))
+        xlims, ylims = ax.get_xlim(), ax.get_ylim()
         for structure in queried_units['structure'].unique().to_list():
             ax.imshow(dashboard_test.ccf.get_ccf_projection(structure, projection=projection, with_opacity=True))
         scatter_df = (
@@ -598,6 +599,8 @@ def plot_ccf_locations_allen(
             alpha=1,
             edgecolors=None,
         )
+        ax.set_xlim(xlims)
+        ax.set_ylim(ylims)
         ax.xaxis.set_visible(False)
         ax.yaxis.set_visible(False)
         for edge, spine in ax.spines.items():
