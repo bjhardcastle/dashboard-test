@@ -245,7 +245,7 @@ def get_acronyms_in_volume() -> set[str]:
     """
     return set(get_ccf_structure_tree_df().filter(pl.col('id').is_in(get_ids_in_volume()))['acronym'])
 
-
+@functools.cache
 def get_ccf_projection(
     ccf_acronym_or_id: str | int | None = None,
     volume: npt.NDArray | None = None, 
@@ -281,7 +281,7 @@ def get_ccf_projection(
     if with_opacity:
         density_projection = (p := subvolume.sum(axis=depth_dim)) / p.max()
     else:
-        density_projection = subvolume.sum(axis=depth_dim) > 0
+        density_projection = (subvolume.sum(axis=depth_dim) > 0) * 1
         
     # flip image axes to match projection_xy
     if tuple(k for k in axis_to_dim if axis_to_dim[k] != depth_dim) != projection_yx[projection]:
@@ -299,10 +299,6 @@ def get_ccf_projection(
     if not normalize_rgb:
         rgb_image *= 255
         
-    if not with_opacity:
-        logger.info(f'Returning {rgb_image.shape=}')
-        return rgb_image
-    
     rgba_image = np.concatenate((rgb_image, density_projection[:, :, np.newaxis]), axis=-1)
     logger.info(f'Returning {rgba_image.shape=}')
     return rgba_image
@@ -332,7 +328,7 @@ if __name__ == '__main__':
     import matplotlib.pyplot as plt
     for projection in ('sagittal', 'coronal', 'horizontal'):
         plt.imshow(get_ccf_projection(projection=projection))
-        plt.imshow(get_ccf_projection('MOs', projection=projection))
+        plt.imshow(get_ccf_projection('MOs', projection=projection, with_opacity=False))
         plt.gcf().savefig(f'{projection}.png')
         plt.close()
     

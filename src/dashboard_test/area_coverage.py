@@ -1,21 +1,23 @@
-import html
 import logging
 from typing import Iterable, Literal, TypeVar
 
+import brainglobe_heatmap
 import brainrender
-import brainrender.scene
 import brainrender.actors
+import brainrender.scene
 import matplotlib.pyplot as plt
 import npc_lims
 import numpy as np
 import panel as pn
 import plotly.express as px
 import polars as pl
-import brainglobe_heatmap
 import upath
+
+import dashboard_test.ccf
+
 # import iblatlas.plots
 # import iblatlas.atlas
-import vtk
+
 
 # pn.extension('vtk')   
 
@@ -37,28 +39,6 @@ def get_component_lf(nwb_component: npc_lims.NWBComponentStr) -> pl.LazyFrame:
     )
     logger.info(f"Reading dataframe from {path}")
     return pl.scan_parquet(path)
-    
-@pn.cache
-def get_ccf_structure_tree_lf() -> pl.LazyFrame:
-    isilon_path = upath.UPath('//allen/programs/mindscope/workgroups/np-behavior/ccf_structure_tree_2017.csv')
-    github_path = upath.UPath('https://raw.githubusercontent.com/cortex-lab/allenCCF/master/structure_tree_safe_2017.csv')
-    path = isilon_path if isilon_path.exists() else github_path
-    return (
-        pl.scan_csv(path.as_posix())
-        .with_columns(
-            color_hex_int=pl.col('color_hex_triplet').str.to_integer(base=16),
-            color_hex_str=pl.lit('0x') + pl.col('color_hex_triplet'),
-        )
-        .with_columns(
-            r=pl.col('color_hex_triplet').str.slice(0, 2).str.to_integer(base=16).mul(1/255),
-            g=pl.col('color_hex_triplet').str.slice(2, 2).str.to_integer(base=16).mul(1/255),
-            b=pl.col('color_hex_triplet').str.slice(4, 2).str.to_integer(base=16).mul(1/255),
-        )
-        .with_columns(
-            color_rgb=pl.concat_list('r', 'g', 'b'),
-        )
-        .drop('r', 'g', 'b')
-    )
 
 @pn.cache
 def get_good_units_df() -> pl.DataFrame:
@@ -109,7 +89,7 @@ def get_good_units_df() -> pl.DataFrame:
             on=('session_id', 'electrode_group_name'),
         )
         .join(
-            other=get_ccf_structure_tree_lf(),
+            other=dashboard_test.ccf.get_ccf_structure_tree_df(),
             right_on='acronym',
             left_on='location',
         )
@@ -223,7 +203,7 @@ def get_ccf_location_query_lf(
         .select('session_id', 'electrode_group_name', 'implant_location', 'ccf_ml', 'ccf_ap', 'ccf_dv', 'location', 'structure')
         .join(
             other=(
-                get_ccf_structure_tree_lf()
+                dashboard_test.ccf.get_ccf_structure_tree_df()
                 .select('acronym', pl.selectors.starts_with("color_"))
             ),
             right_on='acronym',
@@ -353,7 +333,7 @@ def table_holes_to_hit_areas(
     return pn.widgets.Tabulator(
         value=insertions.to_pandas(),
         disabled=True,
-        selectable=1,
+        selectable=False,
         show_index=False,
         theme="modern",
         # page_size=10,
@@ -582,25 +562,69 @@ def plot_ccf_locations_brainglobe(
     return pn.pane.Matplotlib(fig, tight=True)
 
 
+def plot_ccf_locations_allen( 
+    search_term: str, 
+    search_type: Literal['starts_with', 'contains'] = 'starts_with',
+    case_sensitive: bool = True,
+    implant_location: str | list[str] | None = None,
+    whole_probe: bool = False,
+) -> pn.pane.Matplotlib:
+    
+    queried_units = get_unit_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive)
+    ccf_locations = (
+        get_ccf_location_query_lf(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive, implant_location=implant_location, whole_probe=whole_probe)
+    ).collect()
+    
+    ADJUST_X = ADJUST_Y = -5000 #! adjust for brain-globe heatmap origin at center (5000 is not correct)
+
+    fig, axes = plt.subplots(1, 2)
+    depth_column = {"horizontal": "ccf_dv", "coronal": "ccf_ap", "sagittal":  "ccf_ml"}
+    for ax, projection in zip(axes, depth_column.keys()):
+        ax.imshow(dashboard_test.ccf.get_ccf_projection(projection=projection))
+        for structure in queried_units['structure'].unique().to_list():
+            ax.imshow(dashboard_test.ccf.get_ccf_projection(structure, projection=projection, with_opacity=True))
+        scatter_df = (
+            ccf_locations
+            .select('ccf_ml', 'ccf_ap', 'ccf_dv')
+            .select(pl.selectors.contains("ccf") & ~pl.selectors.contains(depth_column[projection]))
+        )
+        ax: plt.Axes
+        scatter_array = scatter_df.to_numpy().T / 25
+        logger.info(f"Adding {scatter_df.shape=} points on {projection} image")
+        ax.scatter(
+            *scatter_array,
+            # c=ccf_df['color_rgb'],
+            c='w',
+            s=0.05,
+            alpha=0.8,
+            edgecolors=None,
+        )
+        ax.xaxis.set_visible(False)
+        ax.yaxis.set_visible(False)
+        for edge, spine in ax.spines.items():
+            spine.set_visible(False)
+    fig.tight_layout()
+    return pn.pane.Matplotlib(fig, tight=True)
+
 search_type_input = pn.widgets.Select(name='Search type', options=['starts_with', 'contains'], value='starts_with')
 search_term_input = pn.widgets.TextInput(name='Search location', value='AUD')
 search_case_sensitive_input = pn.widgets.Checkbox(name='Case sensitive', value=False)
 group_by_input = pn.widgets.Select(name='Group by', options=['session_id', 'subject_id'], value='subject_id')
-whole_probe_input = pn.widgets.Checkbox(name='Whole probe', value=False)
+whole_probe_input = pn.widgets.Checkbox(name='Show whole probe track in brain images', value=False)
 
 search_input = dict(search_term=search_term_input, search_type=search_type_input, case_sensitive=search_case_sensitive_input)
 bound_plot_unit_locations_bar = pn.bind(plot_unit_locations_bar, **search_input, group_by=group_by_input)
 bound_plot_co_recorded_structures_bar = pn.bind(plot_co_recorded_structures_bar, **search_input)
 bound_table_holes_to_hit_areas = pn.bind(table_holes_to_hit_areas, **search_input)
-bound_plot_ccf_locations = pn.bind(plot_ccf_locations_3d, **search_input, whole_probe=whole_probe_input)
+bound_plot_ccf_locations = pn.bind(plot_ccf_locations_allen, **search_input, whole_probe=whole_probe_input)
 
 #TODO bind ccf_locations with bound_table_holes_to_hit_areas().selected_dataframe['implant_location'].values
 
 # bottom row of less-important plots
-bottom_row = pn.Row(bound_plot_co_recorded_structures_bar, bound_table_holes_to_hit_areas)
+bottom_row = pn.Row(bound_table_holes_to_hit_areas, bound_plot_ccf_locations, bound_plot_co_recorded_structures_bar)
 
 # column of plots   
-column = pn.Column(bound_plot_unit_locations_bar, bottom_row)
+column = pn.Column(bound_plot_unit_locations_bar,  bottom_row)
 
 pn.template.MaterialTemplate(
     site="Dynamic Routing dashboard",
@@ -609,14 +633,3 @@ pn.template.MaterialTemplate(
     main=[column],
 ).servable()
 
-if __name__ == "__main__":
-    kwargs = dict(search_term='AUD', search_type='starts_with', case_sensitive=False)
-    df = get_good_units_df()
-    print(len(df))
-    print(df.columns)
-    df = get_unit_location_query_df(**kwargs).collect()
-    print(len(df))
-    print(df.columns)
-    df = get_ccf_location_query_lf(**kwargs).collect()
-    print(len(df))
-    print(df.columns)
