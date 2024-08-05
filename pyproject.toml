@@ -31,3 +31,6 @@ license = {text = "MIT"}
 [build-system]
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
+
+[tool.pdm.scripts]
+panel = "panel serve src/dashboard_test/area_coverage.py --show --autoreload --address 10.128.37.38 --allow-websocket-origin=*"
