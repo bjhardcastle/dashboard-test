@@ -575,8 +575,6 @@ def plot_ccf_locations_allen(
         get_ccf_location_query_lf(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive, implant_location=implant_location, whole_probe=whole_probe)
     ).collect()
     
-    ADJUST_X = ADJUST_Y = -5000 #! adjust for brain-globe heatmap origin at center (5000 is not correct)
-
     fig, axes = plt.subplots(1, 2)
     depth_column = {"horizontal": "ccf_dv", "coronal": "ccf_ap", "sagittal":  "ccf_ml"}
     for ax, projection in zip(axes, depth_column.keys()):
