@@ -330,14 +330,22 @@ def table_holes_to_hit_areas(
         .get_column('implant hole')
         .value_counts(sort=True, name="n insertions")
     )
+    # Create a Panel Tabulator object
+    stylesheet = """
+    .tabulator-cell {
+        font-size: 12px;
+    }
+    """
     return pn.widgets.Tabulator(
         value=insertions.to_pandas(),
         disabled=True,
         selectable=False,
         show_index=False,
         theme="modern",
-        # page_size=10,
-        # pagination='local',
+        page_size=5,
+        pagination='local',
+        # width=200,
+        stylesheets=[stylesheet],
     )
 
 @pn.cache
