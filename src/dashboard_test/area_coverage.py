@@ -143,6 +143,7 @@ def get_unit_location_query_df(
     logger.info(f"Filtered on area, found {len(units['location'].unique())} locations across {len(units['session_id'].unique())} sessions: location.{search_type}({search_term}, {case_sensitive=})")
     return units
 
+@pn.cache
 def get_ccf_location_query_lf(
     search_term: str,
     search_type: Literal['starts_with', 'contains'] = 'starts_with',
