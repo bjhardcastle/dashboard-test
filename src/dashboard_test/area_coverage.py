@@ -1,10 +1,6 @@
 import logging
 from typing import Iterable, Literal, TypeVar
 
-import brainglobe_heatmap
-import brainrender
-import brainrender.actors
-import brainrender.scene
 import matplotlib.pyplot as plt
 import npc_lims
 import numpy as np
@@ -12,15 +8,8 @@ import pandas as pd
 import panel as pn
 import plotly.express as px
 import polars as pl
-import upath
 
 import dashboard_test.ccf
-
-# import iblatlas.plots
-# import iblatlas.atlas
-
-
-# pn.extension('vtk')   
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -451,15 +440,6 @@ def table_holes_to_hit_areas(
         height=250,
         stylesheets=[stylesheet],
     )
-
-@pn.cache
-def get_ccf_scene() -> brainrender.Scene:
-    scene = brainrender.Scene()     
-    # adjust root-brain region
-    scene.backend = "itkwidgets"
-    scene.actors[0].opacity(0.05) 
-    scene.plotter.background([1, 1, 1])
-    return scene
 
 def plot_ccf_locations_2d( 
     search_term: str, 
