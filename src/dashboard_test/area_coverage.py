@@ -150,6 +150,7 @@ def get_ccf_location_query_lf(
     search_type: Literal['starts_with', 'contains'] = 'starts_with',
     case_sensitive: bool = True,
     implant_location: str | list[str] | None = None,
+    probe_letter: str | None = None,
     whole_probe: bool = False,
 ) -> pl.LazyFrame:
     
@@ -161,6 +162,12 @@ def get_ccf_location_query_lf(
             logger.warning(f"Multiple implant locations found: {_locations}")
         implant_location = _locations[0]
     
+    if probe_letter:
+        probe_letter = probe_letter.upper().replace('PROBE', '').replace('_', '').strip()
+        electrode_group_name = f"probe{probe_letter}"
+    else:
+        electrode_group_name = None
+        
     queried_units = get_unit_location_query_df(
         search_term=search_term,
         search_type=search_type,
@@ -200,7 +207,8 @@ def get_ccf_location_query_lf(
             pl.col('ccf_ap') > -1,
             pl.col('ccf_dv') > -1,
             pl.col('ccf_ml') > -1,
-            pl.col('implant_location') == implant_location if implant_location else pl.lit(True),
+            pl.col('implant_location').str.contains(implant_location) if implant_location else pl.lit(True),
+            pl.col('electrode_group_name') == electrode_group_name if electrode_group_name else pl.lit(True),
         )
         .select('session_id', 'electrode_group_name', 'implant_location', 'ccf_ml', 'ccf_ap', 'ccf_dv', 'location', 'structure')
         .join(
@@ -398,14 +406,37 @@ def table_holes_to_hit_areas(
 ) -> pn.pane.Plotly:
     insertions: pl.DataFrame = (
         get_unit_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive)
-        .group_by('session_id', 'electrode_group_name')
+        .with_columns(
+            insertion_id=pl.concat_str(pl.col('session_id', 'electrode_group_name', 'implant_location'), separator='_')
+        )
+        # find fraction of probe + implant_location hits in this area out of all
+        # placements of probes at this implant_location
+        .join(
+            other=(
+                get_good_units_df()
+                .group_by('electrode_group_name', 'implant_location')
+                .agg(pl.col('session_id').n_unique().alias('insertion_count_for_probe_hole_location'))
+            ),
+            on=('electrode_group_name', 'implant_location'),
+        )
+        .group_by('electrode_group_name', 'implant_location')
         .agg([
-            pl.col('implant_location').first().alias("implant hole")
+            (pl.col('insertion_id').n_unique() / pl.col('insertion_count_for_probe_hole_location')).first().round(2).alias('rate'),
+            pl.col('insertion_id').n_unique().alias('hits'),
         ])
-        .get_column('implant hole')
-        .value_counts(sort=True, name="n insertions")
+        # split location into implant and hole
+        .with_columns([
+            (
+                pl.col('implant_location')
+                .str.split_exact(' ', 1)
+                .struct.rename_fields(["implant", "hole"]).alias('fields')
+            ),
+            pl.col('electrode_group_name').str.replace('probe', '').alias('probe'),
+        ])
+        .unnest('fields')
+        .sort('rate', descending=True)
+        .select('implant', 'hole', 'probe', 'hits', 'rate')
     )
-    # Create a Panel Tabulator object
     stylesheet = """
     .tabulator-cell {
         font-size: 12px;
@@ -435,13 +466,14 @@ def plot_ccf_locations_2d(
     search_type: Literal['starts_with', 'contains'] = 'starts_with',
     case_sensitive: bool = True,
     implant_location: str | list[str] | None = None,
+    probe_letter: str | None = None,
     whole_probe: bool = False,
     show_parent_brain_region: bool = False, # faster
 ) -> pn.pane.Matplotlib:
     
     queried_units = get_unit_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive)
     ccf_locations = (
-        get_ccf_location_query_lf(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive, implant_location=implant_location, whole_probe=whole_probe)
+        get_ccf_location_query_lf(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive, implant_location=implant_location, probe_letter=probe_letter, whole_probe=whole_probe)
     ).collect()
     if not search_term: # if search_term is empty, we just show the background brain volume
         areas = []
@@ -481,25 +513,27 @@ def plot_ccf_locations_2d(
     fig.tight_layout()
     return pn.pane.Matplotlib(fig, tight=True, format="svg", sizing_mode="stretch_width")
 
-search_type_input = pn.widgets.Select(name='Search type', options=['starts_with', 'contains'], value='starts_with')
+search_type = pn.widgets.Select(name='Search type', options=['starts_with', 'contains'], value='starts_with')
 random_area = np.random.choice(get_good_units_df().filter(pl.col('unit_id').is_not_null())['structure'].unique())
-search_term_input = pn.widgets.TextInput(name='Search location', value=random_area, styles={'font-weight': 'bold'})
-search_case_sensitive_input = pn.widgets.Checkbox(name='Case sensitive', value=False)
-group_by_input = pn.widgets.Select(name='Group by', options=['session_id', 'subject_id'], value='subject_id')
-select_implant_hole = pn.widgets.TextInput(name='Filter implant hole', placeholder='e.g. "2002 E2"')
+search_term = pn.widgets.TextInput(name='Search location', value=random_area, styles={'font-weight': 'bold'})
+toggle_case_sensitive = pn.widgets.Checkbox(name='Case sensitive', value=False)
+select_group_by = pn.widgets.Select(name='Group by', options=['session_id', 'subject_id'], value='subject_id')
+search_implant_hole = pn.widgets.TextInput(name='Filter implant or hole', placeholder='e.g. "2002 E2" or "2002"')
+select_probe_letter = pn.widgets.TextInput(name='Filter probe', placeholder='e.g. "A" or "B"')
 show_parent_brain_region = pn.widgets.Checkbox(name='Show parent structure in brain (faster)', value=False)
-whole_probe_input = pn.widgets.Checkbox(name='Show complete probe tracks in brain images', value=False)
+toggle_whole_probe = pn.widgets.Checkbox(name='Show complete probe tracks in brain images', value=False)
 
-search_input = dict(search_term=search_term_input, search_type=search_type_input, case_sensitive=search_case_sensitive_input)
-bound_plot_unit_locations_bar = pn.bind(plot_unit_locations_bar, **search_input, group_by=group_by_input)
+search_input = dict(search_term=search_term, search_type=search_type, case_sensitive=toggle_case_sensitive)
+bound_plot_unit_locations_bar = pn.bind(plot_unit_locations_bar, **search_input, group_by=select_group_by)
 bound_plot_co_recorded_structures_bar = pn.bind(plot_co_recorded_structures_bar, **search_input)
 bound_plot_all_unit_counts_bar = pn.bind(table_all_unit_counts, **search_input)
 bound_table_holes_to_hit_areas = pn.bind(table_holes_to_hit_areas, **search_input)
 bound_plot_ccf_locations = pn.bind(
     plot_ccf_locations_2d, 
     **search_input, 
-    whole_probe=whole_probe_input,
-    implant_location=select_implant_hole,
+    whole_probe=toggle_whole_probe,
+    implant_location=search_implant_hole,
+    probe_letter=select_probe_letter,
     show_parent_brain_region=show_parent_brain_region,    
 )
 
@@ -515,12 +549,13 @@ column_b = pn.Column(
     bound_table_holes_to_hit_areas,
 )
 sidebar = pn.Column(
-    group_by_input,
-    search_type_input,
-    search_term_input,
-    search_case_sensitive_input,
-    select_implant_hole,
-    whole_probe_input,
+    select_group_by,
+    search_type,
+    search_term,
+    toggle_case_sensitive,
+    search_implant_hole,
+    select_probe_letter,
+    toggle_whole_probe,
 )
 pn.template.MaterialTemplate(
     site="DR dashboard",
