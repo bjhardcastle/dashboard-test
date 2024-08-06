@@ -8,6 +8,7 @@ import brainrender.scene
 import matplotlib.pyplot as plt
 import npc_lims
 import numpy as np
+import pandas as pd
 import panel as pn
 import plotly.express as px
 import polars as pl
@@ -336,17 +337,18 @@ def table_all_unit_counts(
         get_good_units_df()
         .group_by(pl.col('location'))
         .agg([
-            pl.col('unit_id').n_unique().alias('n_units'), 
-            pl.col('session_id').n_unique().alias('n_sessions'),
-            pl.col('subject_id').n_unique().alias('n_subjects'),
+            pl.col('unit_id').n_unique().alias('units'), 
+            pl.col('session_id').n_unique().alias('sessions'),
+            pl.col('subject_id').n_unique().alias('subjects'),
             pl.col('structure').first(),
+            pl.col('safe_name').first().alias('description'),
         ])
         # .join(queried_units.select('color_hex_triplet'), on='structure')
-        .sort('n_units', descending=True)
+        .sort('units', descending=True)
         .with_columns(
             selected=pl.col('location').is_in(queried_units['location']),
         )
-        .sort('selected', 'n_units', descending=True)
+        .sort('selected', 'units', descending=True)
         .drop('selected')
         .with_row_index()
     )
@@ -361,8 +363,16 @@ def table_all_unit_counts(
         all_unit_counts
     )
     
-    def color_queried_locations(value):
-        return f'color: %s'
+    def get_color_hex(location) -> str:
+        return f"#{queried_units.filter(pl.col('location') == location)['color_hex_triplet'][0]}"
+    
+    def background_color_queried_locations(location_series: pd.Series) -> list[str]:
+        return [
+            f'background-color: {get_color_hex(location)}' 
+            if location in queried_units['location']
+            else ''
+            for location in location_series
+        ]
         
     stylesheet = """
     .tabulator-cell {
@@ -378,7 +388,7 @@ def table_all_unit_counts(
         height=250,
         stylesheets=[stylesheet],
     )
-    # tabulator.style.applymap(color_queried_locations)
+    tabulator.style.apply(background_color_queried_locations)
     return tabulator
 
 def table_holes_to_hit_areas(
