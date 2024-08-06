@@ -482,7 +482,8 @@ def plot_ccf_locations_2d(
     return pn.pane.Matplotlib(fig, tight=True, format="svg", sizing_mode="stretch_width")
 
 search_type_input = pn.widgets.Select(name='Search type', options=['starts_with', 'contains'], value='starts_with')
-search_term_input = pn.widgets.TextInput(name='Search location', value='MOs', styles={'font-weight': 'bold'})
+random_area = np.random.choice(get_good_units_df().filter(pl.col('unit_id').is_not_null())['structure'].unique())
+search_term_input = pn.widgets.TextInput(name='Search location', value=random_area, styles={'font-weight': 'bold'})
 search_case_sensitive_input = pn.widgets.Checkbox(name='Case sensitive', value=False)
 group_by_input = pn.widgets.Select(name='Group by', options=['session_id', 'subject_id'], value='subject_id')
 select_implant_hole = pn.widgets.TextInput(name='Filter implant hole', placeholder='e.g. "2002 E2"')
