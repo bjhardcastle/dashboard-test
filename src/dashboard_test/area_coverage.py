@@ -422,6 +422,7 @@ def table_holes_to_hit_areas(
         .agg([
             (pl.col('insertion_id').n_unique() / pl.col('insertion_count_for_probe_hole_location')).first().round(2).alias('rate'),
             pl.col('insertion_id').n_unique().alias('hits'),
+            pl.col('insertion_count_for_probe_hole_location').first(),
         ])
         # split location into implant and hole
         .with_columns([
@@ -431,11 +432,21 @@ def table_holes_to_hit_areas(
                 .struct.rename_fields(["implant", "hole"]).alias('fields')
             ),
             pl.col('electrode_group_name').str.replace('probe', '').alias('probe'),
+            pl.col('insertion_count_for_probe_hole_location').alias('total'),
         ])
         .unnest('fields')
         .sort('rate', descending=True)
-        .select('implant', 'hole', 'probe', 'hits', 'rate')
+        .select('implant', 'hole', 'probe', 'hits', 'rate', 'total')
     )
+    column_filters = {
+    'implant': {'type': 'input', 'func': 'like', 'placeholder': 'Filter implant'},
+    'hole': {'type': 'input', 'func': 'like', 'placeholder': 'Filter hole'},
+    'probe': {'type': 'input', 'func': 'like', 'placeholder': 'Filter probe'},
+    'hits': {'type': 'input', 'func': '>', 'placeholder': 'Filter hits > x'},
+    'rate': {'type': 'input', 'func': '>', 'placeholder': 'Filter rate > x'},
+    'total': {'type': 'input', 'func': '>', 'placeholder': 'Filter total > x'},
+    }
+
     stylesheet = """
     .tabulator-cell {
         font-size: 12px;
@@ -449,6 +460,11 @@ def table_holes_to_hit_areas(
         # theme="modern",
         height=250,
         stylesheets=[stylesheet],
+        header_filters=column_filters,
+        layout='fit_columns', 
+        # width=650,
+        header_align='center', 
+        text_align={'int': 'center', 'float': 'center', 'str': 'center'}, #! not working
     )
 
 def plot_ccf_locations_2d( 
