@@ -9,7 +9,7 @@ import panel as pn
 import plotly.express as px
 import polars as pl
 
-import dashboard_test.ccf
+import dashboard_test.ccf as ccf_utils
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
