@@ -79,9 +79,19 @@ def get_good_units_df() -> pl.DataFrame:
             on=('session_id', 'electrode_group_name'),
         )
         .join(
-            other=dashboard_test.ccf.get_ccf_structure_tree_df().lazy(),
+            other=ccf_utils.get_ccf_structure_tree_df().lazy(),
             right_on='acronym',
             left_on='location',
+        )
+        .with_columns(
+            (
+                pl.col('ccf_ml') > (
+                    ccf_utils.RESOLUTION_UM * ccf_utils.get_ccf_volume(
+                        left_hemisphere=True,
+                        right_hemisphere=True,
+                    ).shape[ccf_utils.AXIS_TO_DIM['ml']] // 2
+                )
+            ).alias('is_right_hemisphere'),
         )
     ).collect()
     logger.info(f"Fetched {len(good_units)} good units")
