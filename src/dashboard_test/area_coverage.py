@@ -70,7 +70,7 @@ def get_good_units_df() -> pl.DataFrame:
             other=(
                 get_component_lf("units")
                 .filter(
-                    pl.col('isi_violations_count') < 0.5,
+                    pl.col('isi_violations_ratio') < 0.5,
                     pl.col('amplitude_cutoff') < 0.1,
                     pl.col('presence_ratio') > 0.95,
                 )
