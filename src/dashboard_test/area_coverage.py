@@ -278,15 +278,22 @@ def plot_co_recorded_structures_bar(
         #     )
         # )
         #? supposed to link to operations below, but doesn't work
+        .group_by(pl.col('structure', 'session_id'))
+        .agg([
+            pl.col('unit_id').count().alias('unit_count'), 
+        ])
     )
 
     other_units = (
         other_units
-        .group_by(pl.col('structure', 'session_id')).agg([
-            pl.col('unit_id').count().alias('unit_count'), 
-        ])
         .join(
-            other_units.group_by(pl.col('structure')).agg(pl.col('structure').count().alias('total_structure_count')),
+            other=(
+                other_units
+                .group_by(pl.col('structure'))
+                .agg(
+                    pl.col('unit_count').sum().alias('total_structure_count')
+                )
+            ),            
             on='structure',
         )
         .group_by('structure')
@@ -308,7 +315,7 @@ def plot_co_recorded_structures_bar(
         y="unit_count",
         hover_data="session_id",
         labels={'unit_count': 'units'}, 
-        title=f"top {k} structures co-recorded in sessions with {search_term}", 
+        title=f"top {k} structures co-recorded in sessions with {search_term!r}", 
         barmode='group',
     ) 
     fig.update_layout(
@@ -316,6 +323,63 @@ def plot_co_recorded_structures_bar(
         width=None,
     )
     return pn.pane.Plotly(fig)
+
+def table_all_unit_counts(
+    search_term: str, 
+    search_type: Literal['starts_with', 'contains'] = 'starts_with',
+    case_sensitive: bool = True,
+) -> pn.pane.Plotly:
+    queried_units = (
+        get_unit_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive)
+        )
+    all_unit_counts =(
+        get_good_units_df()
+        .group_by(pl.col('location'))
+        .agg([
+            pl.col('unit_id').n_unique().alias('n_units'), 
+            pl.col('session_id').n_unique().alias('n_sessions'),
+            pl.col('subject_id').n_unique().alias('n_subjects'),
+            pl.col('structure').first(),
+        ])
+        # .join(queried_units.select('color_hex_triplet'), on='structure')
+        .sort('n_units', descending=True)
+        .with_columns(
+            selected=pl.col('location').is_in(queried_units['location']),
+        )
+        .sort('selected', 'n_units', descending=True)
+        .drop('selected')
+        .with_row_index()
+    )
+    color_discrete_map = {}
+    for structure in all_unit_counts['structure'].unique():
+        if structure in queried_units['structure']:
+            color_hex = queried_units.filter(pl.col('structure') == structure)['color_hex_triplet'][0]
+        else:
+            color_hex = "808080"
+        color_discrete_map[structure] = f"#{color_hex}"
+    all_unit_counts = (
+        all_unit_counts
+    )
+    
+    def color_queried_locations(value):
+        return f'color: %s'
+        
+    stylesheet = """
+    .tabulator-cell {
+        font-size: 12px;
+    }
+    """
+    tabulator = pn.widgets.Tabulator(
+        value=all_unit_counts.drop('structure').to_pandas(),
+        disabled=True,
+        selectable=False,
+        show_index=False,
+        pagination=None,
+        height=250,
+        stylesheets=[stylesheet],
+    )
+    # tabulator.style.applymap(color_queried_locations)
+    return tabulator
 
 def table_holes_to_hit_areas(
     search_term: str, 
@@ -342,10 +406,8 @@ def table_holes_to_hit_areas(
         disabled=True,
         selectable=False,
         show_index=False,
-        theme="modern",
-        page_size=5,
-        pagination='local',
-        # width=200,
+        # theme="modern",
+        height=250,
         stylesheets=[stylesheet],
     )
 
@@ -358,220 +420,7 @@ def get_ccf_scene() -> brainrender.Scene:
     scene.plotter.background([1, 1, 1])
     return scene
 
-def plot_ccf_locations_3d( 
-    search_term: str, 
-    search_type: Literal['starts_with', 'contains'] = 'starts_with',
-    case_sensitive: bool = True,
-    implant_location: str | list[str] | None = None,
-    whole_probe: bool = False,
-)  -> pn.pane.VTK:
-    
-    whole_probe = False
-    
-    queried_units = get_unit_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive)
-    ccf_locations = get_ccf_location_query_lf(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive, implant_location=implant_location, whole_probe=whole_probe)
-    
-    scene = get_ccf_scene()     
-    
-    logger.info(f"Removing {len(scene.actors[1:])} actors from 3D scene")
-    scene.remove(*scene.actors[1:]) # remove all actors except root-brain region
-    if search_term: # if search_term is empty, regions will be every area recorded, which will be too many
-        regions = queried_units['location'].drop_nulls().unique().to_list()
-        logger.info(f"Adding {len(regions)} brain regions to 3D scene")
-        for region in regions:
-            scene.add_brain_region(
-                region, 
-                hemisphere='left', 
-                alpha=0.1,
-            )
-
-        n = 5 if whole_probe else 1
-        points = (
-            ccf_locations
-            .sort('session_id', 'electrode_group_name', 'ccf_dv')
-            .gather_every(n)
-        ).collect()
-        logger.info(f"Adding {len(points)} {'electrode' if whole_probe else 'unit'} points to 3D scene (gathered every {n} rows)")
-        track_points = brainrender.actors.Points(
-            points.select('ccf_dv', 'ccf_ap', 'ccf_ml').to_numpy(),
-            radius=15,
-            res=1,
-            # colors='0x000000',
-            colors=points['color_hex_str'].to_list(), #! this is not working
-            alpha=1,
-        )
-        scene.add(track_points)
-
-    # TODO crashes when search term is updated
-    # TODO unit locations are shifted/scaled
-    
-    # handle = plotter.show(*scene.renderables)
-    # handle.objects[0].color = 0xCBD6E2 #set background brain to gray
-
-    # # Create the graphics structure. The renderer renders into the render
-    # # window.
-    # ren = vtk.vtkRenderer()
-    # renWin = vtk.vtkRenderWindow()
-    # renWin.AddRenderer(ren)
-
-    # # Add the actors to the renderer, set the background and size
-    # for actor in scene.actors:
-    #     ren.AddActor(actor)
-    # ren.SetBackground(1, 1, 1)
-    return pn.pane.VTK(scene.plotter.window, width=500, height=500, orientation_widget=True, interactive_orientation_widget=True) 
-
-    # scene = brainrender.Scene()
-    # scene = brainrender.scene.Scene()
-    # for area in queried_units['location'].unique():
-    #     scene.add_brain_region(area, hemisphere='left', alpha=0.3)
-    
-    # track_points = brainrender.actors.Points(
-    # track_points = brainrender.scene.actors.Points(
-    #     coords.to_numpy() * 25, 
-    #     radius=30,
-    #     res=1,
-    # )
-    # scene.add(track_points)
-
-    # count = len(coords)
-
-    # vedo.embedWindow('k3d')
-    # scene.jupyter = True
-
-    # plt = vedo.Plotter()
-    # handle = plt.show(*scene.renderables)
-    # handle.objects[0].color = 0xCBD6E2 #set background brain to gray
-
-    # #set brain region colors
-    # for ia, a in enumerate(areas_to_show):
-
-    #     color = int(get_ccf_structure_tree().filter(acronym=a)['color_hex_triplet'][0], 16)
-    #     handle.objects[ia + 1].color = color
-    #     handle.objects[ia + 1].opacity = 0.1
-
-    # #set probe colors
-    # track_colors = [0x030303]*count
-    
-    # for c, color in zip(range(count), track_colors):
-    #     handle.objects[1 + len(areas_to_show) + c].color = color
-    #     handle.objects[1 + len(areas_to_show) + c].opacity = 0.1
-        
-    # html_content = handle.get_snapshot()
-    # escaped_html = html.escape(html_content)
-
-    # # Create iframe embedding the escaped HTML and display it
-    # iframe_html = f'<iframe srcdoc="{escaped_html}" style="height:100%; width:100%" frameborder="0"></iframe>'
-
-    # # Display iframe in a Panel HTML pane
-    # return pn.pane.HTML(iframe_html, height=350, sizing_mode="stretch_width")
-   
-def plot_ccf_locations_ibl( 
-    search_term: str, 
-    search_type: Literal['starts_with', 'contains'] = 'starts_with',
-    case_sensitive: bool = True,
-    implant_location: str | list[str] | None = None,
-    whole_probe: bool = False,
-) -> pn.pane.Matplotlib:
-    queried_units = get_unit_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive)
-    ccf_df = get_ccf_location_query_lf(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive).collect()
-    
-    ADJUST_X = ADJUST_Y = -5000 #! adjust for brain-globe heatmap origin at center (5000 is not correct)
-    
-    fig, axes = plt.subplots(1, 2)
-    depth_axis = {"frontal": "ccf_ap", "horizontal": "ccf_dv", "sagittal":  "ccf_ml"}
-    for ax, plane in zip(axes, depth_axis.keys()):
-        iblatlas.plots.plot_scalar_on_slice(
-            regions=queried_units['location'].unique().to_numpy(),
-            values=np.full(len(queried_units['location'].unique()), 0.1),
-            slice='top' if plane == 'frontal' else plane,
-            # coord=ccf_df[depth_axis[plane]].top_k(20).median() if plane != 'frontal' else -1000,
-            hemisphere="left",
-            show_cbar=False,
-            background='boundary',
-            ba=iblatlas.atlas.AllenAtlas(),
-            ax=ax,
-        )
-        scatter_df = (
-            ccf_df
-            .select('ccf_ml', 'ccf_ap', 'ccf_dv')
-            .select(pl.selectors.contains("ccf") & ~pl.selectors.contains(depth_axis[plane]))
-        )
-        ax: plt.Axes
-        if plane == "frontal":
-            # brain-globe heatmap is rendering left side on right of plot so invert x-axis
-            ax.invert_xaxis()
-            scatter_df: pl.DataFrame = scatter_df.with_columns(
-                pl.col('ccf_ml').mul(-1).alias('ccf_ml'),
-            )
-        ax.scatter(
-            *scatter_df.to_numpy().T + [[ADJUST_X * -1 if plane == 'frontal' else 1], [ADJUST_Y]],
-            c=ccf_df['color_rgb'],
-            s=0.01 if whole_probe else 0.5,
-            alpha=0.8,
-            edgecolors=None,
-        )
-        logging.info(f"Plotted {len(scatter_df)} points on {plane} plane")
-    fig.tight_layout()
-    return pn.pane.Matplotlib(fig, tight=True)
-
-def plot_ccf_locations_brainglobe( 
-    search_term: str, 
-    search_type: Literal['starts_with', 'contains'] = 'starts_with',
-    case_sensitive: bool = True,
-    implant_location: str | list[str] | None = None,
-    whole_probe: bool = False,
-) -> pn.pane.Matplotlib:
-    queried_units = get_unit_location_query_df(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive)
-    ccf_df = get_ccf_location_query_lf(search_term=search_term, search_type=search_type, case_sensitive=case_sensitive).collect()
-    
-    ADJUST_X = ADJUST_Y = -5000 #! adjust for brain-globe heatmap origin at center (5000 is not correct)
-    
-    fig, axes = plt.subplots(1, 2)
-    depth_axis = {"frontal": "ccf_ap", "horizontal": "ccf_dv", "sagittal":  "ccf_ml"}
-    for ax, plane in zip(axes, depth_axis.keys()):
-        heatmap = brainglobe_heatmap.Heatmap(
-            values={area: 0 for area in queried_units['location'].unique().to_list() if area},
-            orientation=plane,
-            hemisphere="left",
-            position=ccf_df[depth_axis[plane]].top_k(20).median() + 500, 
-            vmin=0,
-            vmax=1,
-            format="2D",
-            cmap="binary",
-            thickness=500, #! this seems to have no effect
-        )
-        heatmap.plot_subplot(
-            fig=fig,
-            ax=ax,
-            show_leged=False,
-            hide_axes=True,
-            show_cbar=False,
-        )
-        scatter_df = (
-            ccf_df
-            .select('ccf_ml', 'ccf_ap', 'ccf_dv')
-            .select(pl.selectors.contains("ccf") & ~pl.selectors.contains(depth_axis[plane]))
-        )
-        ax: plt.Axes
-        if plane == "frontal":
-            # brain-globe heatmap is rendering left side on right of plot so invert x-axis
-            ax.invert_xaxis()
-            scatter_df: pl.DataFrame = scatter_df.with_columns(
-                pl.col('ccf_ml').mul(-1).alias('ccf_ml'),
-            )
-        ax.scatter(
-            *scatter_df.to_numpy().T + [[ADJUST_X * -1 if plane == 'frontal' else 1], [ADJUST_Y]],
-            c=ccf_df['color_rgb'],
-            s=0.01 if whole_probe else 0.5,
-            alpha=0.8,
-            edgecolors=None,
-        )
-        logging.info(f"Plotted {len(scatter_df)} points on {plane} plane")
-    fig.tight_layout()
-    return pn.pane.Matplotlib(fig, tight=True)
-
-
-def plot_ccf_locations_allen( 
+def plot_ccf_locations_2d( 
     search_term: str, 
     search_type: Literal['starts_with', 'contains'] = 'starts_with',
     case_sensitive: bool = True,
@@ -594,7 +443,7 @@ def plot_ccf_locations_allen(
     fig, axes = plt.subplots(1, 2)
     depth_column = {"horizontal": "ccf_dv", "coronal": "ccf_ap", "sagittal":  "ccf_ml"}
     for ax, projection in zip(axes, depth_column.keys()):
-        ax.imshow(dashboard_test.ccf.get_ccf_projection(projection=projection))
+        ax.imshow(dashboard_test.ccf.get_ccf_projection(projection=projection)) # whole brain in grey
         xlims, ylims = ax.get_xlim(), ax.get_ylim()
         for area in areas:
             ax.imshow(dashboard_test.ccf.get_ccf_projection(area, projection=projection, with_opacity=True))
@@ -633,9 +482,10 @@ whole_probe_input = pn.widgets.Checkbox(name='Show complete probe tracks in brai
 search_input = dict(search_term=search_term_input, search_type=search_type_input, case_sensitive=search_case_sensitive_input)
 bound_plot_unit_locations_bar = pn.bind(plot_unit_locations_bar, **search_input, group_by=group_by_input)
 bound_plot_co_recorded_structures_bar = pn.bind(plot_co_recorded_structures_bar, **search_input)
+bound_plot_all_unit_counts_bar = pn.bind(table_all_unit_counts, **search_input)
 bound_table_holes_to_hit_areas = pn.bind(table_holes_to_hit_areas, **search_input)
 bound_plot_ccf_locations = pn.bind(
-    plot_ccf_locations_allen, 
+    plot_ccf_locations_2d, 
     **search_input, 
     whole_probe=whole_probe_input,
     implant_location=select_implant_hole,
@@ -645,8 +495,12 @@ bound_plot_ccf_locations = pn.bind(
 #TODO bind ccf_locations with bound_table_holes_to_hit_areas().selected_dataframe['implant_location'].values
 
 # column of plots   
-column = pn.Column(
-    bound_plot_unit_locations_bar,  
+column_a = pn.Column(
+    bound_plot_all_unit_counts_bar,
+    bound_plot_co_recorded_structures_bar,
+)
+column_b = pn.Column(
+    bound_plot_ccf_locations,
     bound_table_holes_to_hit_areas,
 )
 sidebar = pn.Column(
@@ -655,13 +509,12 @@ sidebar = pn.Column(
     search_term_input,
     search_case_sensitive_input,
     select_implant_hole,
-    # show_parent_brain_region,
     whole_probe_input,
 )
 pn.template.MaterialTemplate(
     site="DR dashboard",
     title=__file__.split('\\')[-1].split('.py')[0].replace('_', ' ').title(),
     sidebar=[sidebar],
-    main=[pn.Row(column, pn.Column(bound_plot_ccf_locations, bound_plot_co_recorded_structures_bar))],
+    main=[pn.Row(column_b, column_a), bound_plot_unit_locations_bar],
 ).servable()
 
