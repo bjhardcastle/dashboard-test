@@ -78,25 +78,15 @@ def get_good_units_df() -> pl.DataFrame:
             ),
             on=('session_id', 'electrode_group_name'),
         )
+        .with_columns((pl.col('ccf_ml') > ccf_utils.get_ml_midpoint()).alias('is_right_hemisphere'))
         .join(
             other=ccf_utils.get_ccf_structure_tree_df().lazy(),
             right_on='acronym',
             left_on='location',
         )
-        .with_columns(
-            (
-                pl.col('ccf_ml') > (
-                    ccf_utils.RESOLUTION_UM * ccf_utils.get_ccf_volume(
-                        left_hemisphere=True,
-                        right_hemisphere=True,
-                    ).shape[ccf_utils.AXIS_TO_DIM['ml']] // 2
-                )
-            ).alias('is_right_hemisphere'),
-        )
     ).collect()
     logger.info(f"Fetched {len(good_units)} good units")
     return good_units
-
 
 DataFrameOrLazyFrame = TypeVar("DataFrameOrLazyFrame", pl.DataFrame, pl.LazyFrame)
 
@@ -125,6 +115,7 @@ def get_unit_location_query_df(
     filter_area: str, 
     filter_type: Literal['starts_with', 'contains'] = 'starts_with',
     case_sensitive: bool = True,
+    include_right_hemisphere: bool = False,
 ) -> pl.DataFrame:
     
     if not case_sensitive:
@@ -136,6 +127,7 @@ def get_unit_location_query_df(
     
     units = (
         get_good_units_df()
+        .filter(pl.col('is_right_hemisphere').eq(False) if not include_right_hemisphere else pl.lit(True))
         .lazy()
         .filter(location_expr)
         .sort('date', "location")
@@ -148,18 +140,11 @@ def get_ccf_location_query_lf(
     filter_area: str,
     filter_type: Literal['starts_with', 'contains'] = 'starts_with',
     case_sensitive: bool = True,
-    filter_implant_location: str | list[str] | None = None,
+    include_right_hemisphere: bool = False,
+    filter_implant_location: str | None = None,
     filter_probe_letter: str | None = None,
     whole_probe: bool = False,
 ) -> pl.LazyFrame:
-    
-    if not filter_implant_location:
-        filter_implant_location = None
-    elif not isinstance(filter_implant_location, str) and isinstance(filter_implant_location, Iterable):
-        _locations = list(loc for loc in filter_implant_location if loc)
-        if len(_locations) > 1:
-            logger.warning(f"Multiple implant locations found: {_locations}")
-        filter_implant_location = _locations[0]
     
     if filter_probe_letter:
         filter_probe_letter = filter_probe_letter.upper().replace('PROBE', '').replace('_', '').strip()
@@ -171,6 +156,7 @@ def get_ccf_location_query_lf(
         filter_area=filter_area,
         filter_type=filter_type,
         case_sensitive=case_sensitive,
+        include_right_hemisphere=include_right_hemisphere,
     )
     
     join_on = ['session_id', 'electrode_group_name']
@@ -186,6 +172,8 @@ def get_ccf_location_query_lf(
             'z': 'ccf_ml',
             'group_name': 'electrode_group_name',
         })
+        .with_columns((pl.col('ccf_ml') > ccf_utils.get_ml_midpoint()).alias('is_right_hemisphere'))
+        .filter(pl.col('is_right_hemisphere').eq(False) if not include_right_hemisphere else pl.lit(True))
         .join(
             other=(
                 get_component_lf('electrode_groups')
@@ -209,7 +197,7 @@ def get_ccf_location_query_lf(
             pl.col('implant_location').str.contains(filter_implant_location) if filter_implant_location else pl.lit(True),
             pl.col('electrode_group_name') == electrode_group_name if electrode_group_name else pl.lit(True),
         )
-        .select('session_id', 'electrode_group_name', 'implant_location', 'ccf_ml', 'ccf_ap', 'ccf_dv', 'location', 'structure')
+        .select('session_id', 'electrode_group_name', 'implant_location', 'ccf_ml', 'ccf_ap', 'ccf_dv', 'location', 'structure', 'is_right_hemisphere')
         .join(
             other=(
                 ccf_utils.get_ccf_structure_tree_df().lazy()
@@ -228,6 +216,7 @@ def plot_unit_locations_bar(
     filter_area: str, 
     filter_type: Literal['starts_with', 'contains'] = 'starts_with',
     case_sensitive: bool = True,
+    include_right_hemisphere: bool = False,
     group_by: Literal['session_id', 'subject_id'] = 'subject_id',
 ) -> pn.pane.Plotly:
     
@@ -235,7 +224,7 @@ def plot_unit_locations_bar(
         return pn.pane.Plotly(None)
 
     grouped_units = apply_unit_count_group_by(
-        get_unit_location_query_df(filter_area=filter_area, filter_type=filter_type, case_sensitive=case_sensitive)
+        get_unit_location_query_df(filter_area=filter_area, filter_type=filter_type, case_sensitive=case_sensitive, include_right_hemisphere=include_right_hemisphere)
         )
     
     fig = px.bar(
@@ -258,9 +247,10 @@ def plot_co_recorded_structures_bar(
     filter_area: str, 
     filter_type: Literal['starts_with', 'contains'] = 'starts_with',
     case_sensitive: bool = True,
+    include_right_hemisphere: bool = False,
 ) -> pn.pane.Plotly:
     queried_units = (
-        get_unit_location_query_df(filter_area=filter_area, filter_type=filter_type, case_sensitive=case_sensitive)
+        get_unit_location_query_df(filter_area=filter_area, filter_type=filter_type, case_sensitive=case_sensitive, include_right_hemisphere=include_right_hemisphere)
         )
     other_units = (
         apply_unit_count_group_by(get_good_units_df())
@@ -273,19 +263,6 @@ def plot_co_recorded_structures_bar(
         .filter(
             ~pl.col('unit_id').is_in(queried_units['unit_id'])
         )
-        # .pipe(
-        #     lambda df: df.join(
-        #         other=(
-        #             df
-        #             .group_by('structure')
-        #             .agg(
-        #                 pl.col('structure').count().alias('total_structure_count')
-        #                 )
-        #         ),
-        #         on='structure',
-        #     )
-        # )
-        #? supposed to link to operations below, but doesn't work
         .group_by(pl.col('structure', 'session_id'))
         .agg([
             pl.col('unit_id').count().alias('unit_count'), 
@@ -336,12 +313,14 @@ def table_all_unit_counts(
     filter_area: str, 
     filter_type: Literal['starts_with', 'contains'] = 'starts_with',
     case_sensitive: bool = True,
+    include_right_hemisphere: bool = False,
 ) -> pn.pane.Plotly:
     queried_units = (
-        get_unit_location_query_df(filter_area=filter_area, filter_type=filter_type, case_sensitive=case_sensitive)
+        get_unit_location_query_df(filter_area=filter_area, filter_type=filter_type, case_sensitive=case_sensitive, include_right_hemisphere=include_right_hemisphere)
         )
     all_unit_counts =(
         get_good_units_df()
+        .filter(pl.col('is_right_hemisphere').eq(False) if not include_right_hemisphere else pl.lit(True))
         .group_by(pl.col('location'))
         .agg([
             pl.col('unit_id').n_unique().alias('units'), 
@@ -350,7 +329,6 @@ def table_all_unit_counts(
             pl.col('structure').first(),
             pl.col('safe_name').first().alias('description'),
         ])
-        # .join(queried_units.select('color_hex_triplet'), on='structure')
         .sort('units', descending=True)
         .with_columns(
             selected=pl.col('location').is_in(queried_units['location']),
@@ -366,9 +344,6 @@ def table_all_unit_counts(
         else:
             color_hex = "808080"
         color_discrete_map[structure] = f"#{color_hex}"
-    all_unit_counts = (
-        all_unit_counts
-    )
     
     def get_color_hex(location) -> str:
         return f"#{queried_units.filter(pl.col('location') == location)['color_hex_triplet'][0]}"
@@ -402,9 +377,10 @@ def table_holes_to_hit_areas(
     filter_area: str, 
     filter_type: Literal['starts_with', 'contains'] = 'starts_with',
     case_sensitive: bool = True,
+    include_right_hemisphere: bool = False,
 ) -> pn.pane.Plotly:
     insertions: pl.DataFrame = (
-        get_unit_location_query_df(filter_area=filter_area, filter_type=filter_type, case_sensitive=case_sensitive)
+        get_unit_location_query_df(filter_area=filter_area, filter_type=filter_type, case_sensitive=case_sensitive, include_right_hemisphere=include_right_hemisphere)
         .with_columns(
             insertion_id=pl.concat_str(pl.col('session_id', 'electrode_group_name', 'implant_location'), separator='_')
         )
@@ -471,6 +447,7 @@ def plot_ccf_locations_2d(
     filter_area: str, 
     filter_type: Literal['starts_with', 'contains'] = 'starts_with',
     case_sensitive: bool = True,
+    include_right_hemisphere: bool = False,
     filter_implant_location: str | None = None,
     filter_probe_letter: str | None = None,
     show_implant_location_query_for_all_areas: bool = False,
@@ -478,12 +455,18 @@ def plot_ccf_locations_2d(
     show_parent_brain_region: bool = False, # faster
 ) -> pn.pane.Matplotlib:
     
-    queried_units = get_unit_location_query_df(filter_area=filter_area, filter_type=filter_type, case_sensitive=case_sensitive)
+    queried_units = get_unit_location_query_df(
+        filter_area=filter_area,
+        filter_type=filter_type,
+        case_sensitive=case_sensitive,
+        include_right_hemisphere=include_right_hemisphere,
+    )
     ccf_locations = (
         get_ccf_location_query_lf(
             filter_area=filter_area,
             filter_type=filter_type, 
             case_sensitive=case_sensitive,
+            include_right_hemisphere=include_right_hemisphere,
             filter_implant_location=filter_implant_location,
             filter_probe_letter=filter_probe_letter,
             whole_probe=show_whole_probe_tracks,
@@ -498,6 +481,7 @@ def plot_ccf_locations_2d(
                 filter_area="",
                 filter_type=filter_type, 
                 case_sensitive=case_sensitive,
+                include_right_hemisphere=include_right_hemisphere,
                 filter_implant_location=filter_implant_location,
                 filter_probe_letter=filter_probe_letter,
                 whole_probe=True,
@@ -521,10 +505,10 @@ def plot_ccf_locations_2d(
     fig, axes = plt.subplots(1, 2)
     depth_column = {"horizontal": "ccf_dv", "coronal": "ccf_ap", "sagittal":  "ccf_ml"}
     for ax, projection in zip(axes, depth_column.keys()):
-        ax.imshow(ccf_utils.get_ccf_projection(projection=projection)) # whole brain in grey
+        ax.imshow(ccf_utils.get_ccf_projection(projection=projection, include_right_hemisphere=include_right_hemisphere)) # whole brain in grey
         xlims, ylims = ax.get_xlim(), ax.get_ylim()
         for area in areas:
-            ax.imshow(ccf_utils.get_ccf_projection(area, projection=projection, with_opacity=True))
+            ax.imshow(ccf_utils.get_ccf_projection(area, projection=projection, with_opacity=True, include_right_hemisphere=include_right_hemisphere))
         # logger.info(f"Adding {ccf_locations.shape=} unit locations to {projection} image")
         # ax: plt.Axes
         # ax.imshow(
@@ -537,6 +521,7 @@ def plot_ccf_locations_2d(
         for locations in (ccf_locations, other_area_ccf_locations):
             if locations is None:
                 continue
+            locations: pl.DataFrame
             scatter_df = (
                 locations
                 .select('ccf_ml', 'ccf_ap', 'ccf_dv')
@@ -578,12 +563,12 @@ search_area = dict(
     filter_area=filter_area,
     filter_type=filter_type,
     case_sensitive=toggle_case_sensitive,
+    include_right_hemisphere=toggle_right_hemisphere,
 )
 search_insertion = dict(
     filter_implant_location=search_implant_location,
     filter_probe_letter=search_probe_letter,
 )
-
 bound_unit_locations_bar = pn.bind(plot_unit_locations_bar, **search_area, group_by=select_group_by)
 bound_co_recorded_structures_bar = pn.bind(plot_co_recorded_structures_bar, **search_area)
 bound_all_unit_counts_bar = pn.bind(table_all_unit_counts, **search_area)
@@ -609,6 +594,7 @@ sidebar = pn.Column(
     filter_type,
     filter_area,
     toggle_case_sensitive,
+    toggle_right_hemisphere,
     search_implant_location,
     search_probe_letter,
     toggle_implant_location_query_for_all_areas,
