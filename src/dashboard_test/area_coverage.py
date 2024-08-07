@@ -561,7 +561,7 @@ search_probe_letter = pn.widgets.TextInput(name='Filter probe letter', placehold
 toggle_right_hemisphere = pn.widgets.Checkbox(name='Include right hemisphere', value=False)
 show_parent_brain_region = pn.widgets.Checkbox(name='Show parent structure in brain (faster)', value=False)
 toggle_whole_probe = pn.widgets.Checkbox(name='Show complete probe tracks', value=False)
-toggle_implant_location_query_for_all_areas = pn.widgets.Checkbox(name='Show insertions that missed area (use with filter on implant/hole/probe)', value=False)
+toggle_implant_location_query_for_all_areas = pn.widgets.Checkbox(name='Show matching insertions that missed area', value=False)
 
 search_area = dict(
     filter_area=filter_area,
