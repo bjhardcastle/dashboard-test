@@ -538,9 +538,10 @@ def plot_ccf_locations_2d(
                 ccf_utils.get_scatter_image(
                     ccf_locations_df=locations,
                     projection=projection, # type: ignore
+                    include_right_hemisphere=include_right_hemisphere,
                     opacity_range=(0.7, 1.0),
                 ) * ([0, 0, 0, 1] if locations is other_area_ccf_locations else [1, 1, 1, 1]),
-                interpolation='none',
+                interpolation='nearest',
             )
         
         ax.set_xlim(xlims)
