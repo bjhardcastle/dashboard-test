@@ -520,6 +520,7 @@ def plot_ccf_locations_2d(
                 ccf_utils.get_scatter_image(
                     ccf_locations_df=locations,
                     projection=projection, # type: ignore
+                    include_right_hemisphere=include_right_hemisphere,
                     opacity_range=(0.5, 1.0),
                 ),
                 interpolation='none',

@@ -320,6 +320,7 @@ def get_scatter_image(
     projection: Literal['sagittal', 'coronal', 'horizontal'] = 'horizontal',
     image_shape: tuple[int, int] | None = None,
     opacity_range: tuple[float, float] = (0.8, 1.0),
+    include_right_hemisphere: bool = False,
 ) -> npt.NDArray[np.floating]:
     """Alternative to using a scatter plot: create an image array (rgba) with the
     scatter points at full opacity white, and the rest of the image zeros, full
@@ -333,7 +334,7 @@ def get_scatter_image(
     """
     t = time.time()
     if not image_shape:
-        image_shape: tuple[int, int] = get_ccf_projection(projection=projection).shape[:2] # type: ignore
+        image_shape: tuple[int, int] = get_ccf_projection(projection=projection, include_right_hemisphere=include_right_hemisphere).shape[:2] # type: ignore
     columns = tuple(f"ccf_{axis}" for axis in PROJECTION_YX[projection])
     yx_locations = ccf_locations_df.lazy().select(columns).collect().to_numpy().T / RESOLUTION_UM
     y_edges = np.linspace(0, image_shape[0], image_shape[0] + 1)
