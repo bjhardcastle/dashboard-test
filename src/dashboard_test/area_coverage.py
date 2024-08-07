@@ -612,6 +612,6 @@ pn.template.MaterialTemplate(
     site="DR dashboard",
     title=__file__.split('\\')[-1].split('.py')[0].replace('_', ' ').title(),
     sidebar=[sidebar],
-    main=[pn.Row(plot_column_b, plot_column_a), bound_barplot_unit_locations, bound_barplot_co_recorded_structures,
+    main=[pn.Row(plot_column_a, plot_column_b), bound_barplot_unit_locations, bound_barplot_co_recorded_structures,
 ],
 ).servable()
