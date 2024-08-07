@@ -14,29 +14,25 @@ import upath
 logger = logging.getLogger(__name__)
 
 RESOLUTION_UM = 25
-
-ORIGINAL_AXIS_TO_DIM: dict[str, int] = {'ap': 0, 'ml': 1, 'dv': 2}
-AXIS_TO_DIM = {'ap': 2, 'ml': 0, 'dv': 1}
+AXIS_TO_DIM = {'ml': 0, 'dv': 1, 'ap': 2}
 PROJECTION_TO_AXIS = {'sagittal': 'ml', 'coronal': 'ap', 'horizontal': 'dv'}
 PROJECTION_YX = {'sagittal': ('dv', 'ap'), 'coronal': ('dv', 'ml'), 'horizontal': ('ap', 'ml')}
+
 
 @functools.cache
 def get_ccf_volume(left_hemisphere = True, right_hemisphere=False) -> npt.NDArray:
     """
     array[ap, ml, dv]
     
-    From iblatlas
-    
     >>> volume = get_ccf_volume()
     >>> assert volume.any()
     """
 
-    local_path = upath.UPath("//allen/programs/mindscoEpe/workgroups/np-behavior/annotation_25.nrrd")
-    local_path = upath.UPath("C:/Users/BEN~1.HAR/AppData/Local/Temp/tmprrkdzln2/annotation_25.nrrd")
-    cloud_path = upath.UPath("https://download.alleninstitute.org/informatics-archive/current-release/mouse_ccf/annotation/ccf_2017/annotation_25.nrrd")
+    local_path = upath.UPath(f"//allen/programs/mindscope/workgroups/np-behavior/annotation_{RESOLUTION_UM}.nrrd")
+    cloud_path = upath.UPath(f"https://download.alleninstitute.org/informatics-archive/current-release/mouse_ccf/annotation/ccf_2017/annotation_{RESOLUTION_UM}.nrrd")
     
     path = local_path if local_path.exists() else cloud_path
-    if path.suffix not in (supported := ('.nrrd', '.npz')):
+    if path.suffix not in (supported := ('.nrrd', )):
         raise ValueError(
             f'{path.suffix} files not supported, must be one of {supported}')
     if path.protocol: # cloud path - download it
@@ -48,23 +44,19 @@ def get_ccf_volume(left_hemisphere = True, right_hemisphere=False) -> npt.NDArra
     logger.info(f"Using CCF volume from {path.as_posix()}")
     
     logger.info(f'Loading CCF volume from {path.as_posix()}')
-    if path.suffix == '.nrrd':
-        volume, _ = nrrd.read(path, index_order='C')  # ml, dv, ap
-        # we want the coronal slice to be the most contiguous
-        volume = np.transpose(volume, (2, 0, 1))  # image[iap, iml, idv]
-    elif path.suffix == '.npz':
-        volume = np.load(path)['arr_0']
+    volume, _ = nrrd.read(path, index_order='C')  # ml, dv, ap
+    ml_dim = AXIS_TO_DIM['ml']
     if left_hemisphere and not right_hemisphere:
-        return volume[:, :volume.shape[1]//2, :]
+        return volume[*[slice(0, volume.shape[ml_dim] // 2) if dim == ml_dim else slice(None) for dim in range(3)]]
     if right_hemisphere and not left_hemisphere:
-        return volume[:, volume.shape[1]//2:, :]
+        return volume[*[slice(volume.shape[ml_dim] // 2, volume.shape[ml_dim]) if dim == ml_dim else slice(None) for dim in range(3)]]
     return volume
 
-def get_ml_midpoint() -> float:
+def get_midline_ccf_ml() -> float:
     return RESOLUTION_UM * 0.5 * get_ccf_volume(
         left_hemisphere=True,
         right_hemisphere=True,
-    ).shape[ORIGINAL_AXIS_TO_DIM['ml']]
+    ).shape[AXIS_TO_DIM['ml']]
     
 @functools.cache
 def get_ccf_structure_tree_df() -> pl.DataFrame:
@@ -283,11 +275,10 @@ def get_ccf_projection(
     """    
     if volume is None:
         volume = get_ccf_volume_binary_mask(ccf_acronym_or_id=ccf_acronym_or_id, include_right_hemisphere=include_right_hemisphere)
-    axis_to_dim = {'ap': 0, 'ml': 1, 'dv': 2}
-    projection_to_axis = {'sagittal': 'ml', 'coronal': 'ap', 'horizontal': 'dv'}
-    projection_yx = {'sagittal': ('dv', 'ap'), 'coronal': ('dv', 'ml'), 'horizontal': ('ap', 'ml')}
+    if not len(volume.shape) == 3:
+        raise ValueError(f'Volume must be 3D, got {volume.shape=}')
 
-    depth_dim = axis_to_dim[projection_to_axis[projection]]
+    depth_dim = AXIS_TO_DIM[PROJECTION_TO_AXIS[projection]]
     
     if slice_center_index is None:
         slice_center_index = volume.shape[depth_dim] // 2
@@ -305,7 +296,7 @@ def get_ccf_projection(
         density_projection = (subvolume.sum(axis=depth_dim) > 0) * 1
         
     # flip image axes to match projection_xy
-    if tuple(k for k in axis_to_dim if axis_to_dim[k] != depth_dim) != projection_yx[projection]:
+    if tuple(k for k in AXIS_TO_DIM if AXIS_TO_DIM[k] != depth_dim) != PROJECTION_YX[projection]:
         density_projection = np.transpose(density_projection, (1, 0))
     
     if not with_color:
@@ -319,45 +310,60 @@ def get_ccf_projection(
     rgb_image = rgb * np.stack([np.ones_like(density_projection)] * 3, axis=-1)
     if not normalize_rgb:
         rgb_image *= 255
-        
     rgba_image = np.concatenate((rgb_image, density_projection[:, :, np.newaxis]), axis=-1)
     logger.info(f'Returning {rgba_image.shape=}')
     return rgba_image
 
 
+def get_scatter_image(
+    ccf_locations_df: pl.DataFrame | pl.LazyFrame,
+    projection: Literal['sagittal', 'coronal', 'horizontal'] = 'horizontal',
+    image_shape: tuple[int, int] | None = None,
+    opacity_range: tuple[float, float] = (0.8, 1.0),
+) -> npt.NDArray[np.floating]:
+    """Alternative to using a scatter plot: create an image array (rgba) with the
+    scatter points at full opacity white, and the rest of the image zeros, full
+    opacity.
+    
+    - expects a DataFrame with columns 'ccf_ml', 'ccf_ap', 'ccf_dv'
+    
+    >>> ccf_df = pl.DataFrame({'ccf_ml': [1, 2, 3], 'ccf_ap': [1, 2, 3], 'ccf_dv': [1, 2, 3]})
+    >>> scatter_image = get_scatter_image(ccf_df)
+    >>> assert scatter_image.any()
+    """
+    t = time.time()
+    if not image_shape:
+        image_shape: tuple[int, int] = get_ccf_projection(projection=projection).shape[:2] # type: ignore
+    columns = tuple(f"ccf_{axis}" for axis in PROJECTION_YX[projection])
+    yx_locations = ccf_locations_df.lazy().select(columns).collect().to_numpy().T / RESOLUTION_UM
+    y_edges = np.linspace(0, image_shape[0], image_shape[0] + 1)
+    x_edges = np.linspace(0, image_shape[1], image_shape[1] + 1)
+    yx_hist_counts, _, _ = np.histogram2d(*yx_locations, bins=(y_edges, x_edges), density=True)    
+    logging.info(f"Creating opacity image from hist counts {yx_hist_counts.shape=}, {yx_hist_counts.max()=}")
+    # scale:
+    if np.diff(opacity_range) == 0:
+        yx_opacity = (yx_hist_counts > 0) * 1
+    else:
+        assert np.diff(opacity_range) > 0, f'{opacity_range=}'
+        yx_opacity: npt.NDArray = opacity_range[0] + np.diff(opacity_range)[0] * (yx_hist_counts / yx_hist_counts.max())
+        # make background zero opacity:
+        yx_opacity[yx_opacity <= opacity_range[0]] = 0
+    yx_opacity[yx_opacity > 1] = 1
+    yx_opacity[yx_opacity < 0] = 0
+    logging.info(f"Opacity image created with range ({yx_opacity.min()}, {yx_opacity.max()})")
+    assert yx_opacity.any()
+    assert yx_opacity.any()
+    # yx_opacity = xy_density.T # flip xy back to image axes yx
+    image = np.stack((*[(yx_opacity > 0) * 1] * 3, yx_opacity), axis=2)
+    assert image.shape[2] == 4, f'{image.shape=}'
+    assert len(image.shape) == 3, f'{image.shape=}, {len(image.shape)=}'
+    assert image.any()
+    logger.info(f'Returning scatter {image.shape=} ({columns}) in {time.time() - t:.2f}s')
+    return image
+
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s | %(name)s | %(levelname)s | %(funcName)s | %(message)s', datefmt='%d-%b-%y %H:%M:%S')
     logging.getLogger().setLevel(logging.DEBUG)
 
-    # import plotly.graph_objects as go
-    # volume = get_ccf_volume_binary_mask() 
-    # AP, ML, DV = np.mgrid[:10:10 * volume.shape[0], :10:10 * volume.shape[1], :10:10 * volume.shape[2]]
-    # fig = go.Figure(data=go.Volume(
-    #     x=ML.flatten(), y=AP.flatten(), z=DV.flatten(),
-    #     value=volume.flatten(),
-    #     isomin=0.2,
-    #     isomax=0.7,
-    #     opacity=0.2,
-    #     surface_count=21,
-    #     slices_z=dict(show=True, locations=[0.4]),
-    #     surface=dict(fill=0.5, pattern='odd'),
-    #     caps= dict(x_show=False, y_show=False, z_show=False), # no caps
-    #     ))
-
-    # fig.show()
-    
-    import matplotlib.pyplot as plt
-    for projection in ('sagittal', 'coronal', 'horizontal'):
-        plt.imshow(get_ccf_projection(projection=projection))
-        plt.imshow(get_ccf_projection('MOs', projection=projection, with_opacity=False))
-        plt.gcf().savefig(f'{projection}.png')
-        plt.close()
-    
-    # img = get_ccf_projection(projection='horizontal')
-    # plt.imshow(img)
-    # plt.show()
-    # import plotly.express as px
-    # px.imshow(img[:, :, 0:3], zmax = 1).show()
-
-    # import doctest
-    # doctest.testmod()    
+    import doctest
+    doctest.testmod()    

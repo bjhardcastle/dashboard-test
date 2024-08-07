@@ -1,5 +1,5 @@
 import logging
-from typing import Iterable, Literal, TypeVar
+from typing import Literal, TypeVar
 
 import matplotlib.pyplot as plt
 import npc_lims
@@ -78,7 +78,7 @@ def get_good_units_df() -> pl.DataFrame:
             ),
             on=('session_id', 'electrode_group_name'),
         )
-        .with_columns((pl.col('ccf_ml') > ccf_utils.get_ml_midpoint()).alias('is_right_hemisphere'))
+        .with_columns((pl.col('ccf_ml') > ccf_utils.get_midline_ccf_ml()).alias('is_right_hemisphere'))
         .join(
             other=ccf_utils.get_ccf_structure_tree_df().lazy(),
             right_on='acronym',
@@ -172,7 +172,7 @@ def get_ccf_location_query_lf(
             'z': 'ccf_ml',
             'group_name': 'electrode_group_name',
         })
-        .with_columns((pl.col('ccf_ml') > ccf_utils.get_ml_midpoint()).alias('is_right_hemisphere'))
+        .with_columns((pl.col('ccf_ml') > ccf_utils.get_midline_ccf_ml()).alias('is_right_hemisphere'))
         .filter(pl.col('is_right_hemisphere').eq(False) if not include_right_hemisphere else pl.lit(True))
         .join(
             other=(
@@ -509,35 +509,21 @@ def plot_ccf_locations_2d(
         xlims, ylims = ax.get_xlim(), ax.get_ylim()
         for area in areas:
             ax.imshow(ccf_utils.get_ccf_projection(area, projection=projection, with_opacity=True, include_right_hemisphere=include_right_hemisphere))
-        # logger.info(f"Adding {ccf_locations.shape=} unit locations to {projection} image")
-        # ax: plt.Axes
-        # ax.imshow(
-        #     ccf_utils.get_scatter_image(
-        #         ccf_locations_df=ccf_locations,
-        #         projection=projection, # type: ignore
-        #         opacity_range=(0.8, 1.0),
-        #     )
-        # )
         for locations in (ccf_locations, other_area_ccf_locations):
             if locations is None:
                 continue
             locations: pl.DataFrame
-            scatter_df = (
-                locations
-                .select('ccf_ml', 'ccf_ap', 'ccf_dv')
-                .select(pl.selectors.contains("ccf") & ~pl.selectors.contains(depth_column[projection]))
-            )
+            logger.info(f"Adding {ccf_locations.shape=} unit locations to {projection} image")
             ax: plt.Axes
-            scatter_array = scatter_df.to_numpy().T / 25
-            logger.info(f"Adding {scatter_df.shape=} points on {projection} image")
-            ax.scatter(
-                *scatter_array,
-                c='w' if locations is ccf_locations else 'k',
-                s=0.05,
-                alpha=1,
-                edgecolors=None,
+            ax.imshow(
+                ccf_utils.get_scatter_image(
+                    ccf_locations_df=locations,
+                    projection=projection, # type: ignore
+                    opacity_range=(0.5, 1.0),
+                ),
+                interpolation='none',
             )
-            
+        
         ax.set_xlim(xlims)
         ax.set_ylim(ylims)
         ax.xaxis.set_visible(False)
@@ -545,10 +531,10 @@ def plot_ccf_locations_2d(
         for edge, spine in ax.spines.items():
             spine.set_visible(False)
     fig.tight_layout()
-    return pn.pane.Matplotlib(fig, tight=True, format="svg", sizing_mode="stretch_width")
+    return pn.pane.Matplotlib(fig, tight=True, sizing_mode="stretch_width")
 
 filter_type = pn.widgets.Select(name='Search type', options=['starts_with', 'contains'], value='starts_with')
-random_area = np.random.choice(get_good_units_df().filter(pl.col('unit_id').is_not_null())['structure'].unique())
+random_area = np.random.choice(get_good_units_df().filter(pl.col('unit_id').is_not_null(), ~pl.col('is_right_hemisphere'))['structure'].unique())
 filter_area = pn.widgets.TextInput(name='Search brain area', value=random_area, styles={'font-weight': 'bold'})
 toggle_case_sensitive = pn.widgets.Checkbox(name='Case sensitive', value=False)
 select_group_by = pn.widgets.Select(name='Group by', options=['session_id', 'subject_id'], value='subject_id')
@@ -606,4 +592,3 @@ pn.template.MaterialTemplate(
     sidebar=[sidebar],
     main=[pn.Row(plot_column_b, plot_column_a), bound_unit_locations_bar],
 ).servable()
-
