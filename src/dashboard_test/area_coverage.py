@@ -137,6 +137,9 @@ def get_unit_location_query_df(
     logger.info(f"Filtered on area, found {len(units['location'].unique())} locations across {len(units['session_id'].unique())} sessions: location.{filter_type}({filter_area}, {case_sensitive=})")
     return units
 
+def format_probe_name(probe_name: str) -> str:
+    return f"probe{probe_name.upper().replace('PROBE', '').replace('_', '').strip()}"
+
 @pn.cache
 def get_ccf_location_query_lf(
     filter_area: str,
@@ -147,12 +150,6 @@ def get_ccf_location_query_lf(
     filter_probe_letter: str | None = None,
     whole_probe: bool = False,
 ) -> pl.LazyFrame:
-    
-    if filter_probe_letter:
-        filter_probe_letter = filter_probe_letter.upper().replace('PROBE', '').replace('_', '').strip()
-        electrode_group_name = f"probe{filter_probe_letter}"
-    else:
-        electrode_group_name = None
         
     queried_units = get_unit_location_query_df(
         filter_area=filter_area,
@@ -197,7 +194,7 @@ def get_ccf_location_query_lf(
             pl.col('ccf_dv') > -1,
             pl.col('ccf_ml') > -1,
             pl.col('implant_location').str.contains(filter_implant_location) if filter_implant_location else pl.lit(True),
-            pl.col('electrode_group_name') == electrode_group_name if electrode_group_name else pl.lit(True),
+            pl.col('electrode_group_name') == format_probe_name(filter_probe_letter) if filter_probe_letter else pl.lit(True),
         )
         .select('session_id', 'electrode_group_name', 'implant_location', 'ccf_ml', 'ccf_ap', 'ccf_dv', 'location', 'structure', 'is_right_hemisphere')
         .join(
@@ -316,13 +313,19 @@ def table_all_unit_counts(
     filter_type: Literal['starts_with', 'contains'] = 'starts_with',
     case_sensitive: bool = True,
     include_right_hemisphere: bool = False,
+    filter_implant_location: str | None = None,
+    filter_probe_letter: str | None = None,
 ) -> pn.pane.Plotly:
     queried_units = (
         get_unit_location_query_df(filter_area=filter_area, filter_type=filter_type, case_sensitive=case_sensitive, include_right_hemisphere=include_right_hemisphere)
         )
     all_unit_counts =(
         get_good_units_df()
-        .filter(pl.col('is_right_hemisphere').eq(False) if not include_right_hemisphere else pl.lit(True))
+        .filter(
+            pl.col('is_right_hemisphere').eq(False) if not include_right_hemisphere else pl.lit(True),
+            pl.col('implant_location').str.contains(filter_implant_location) if filter_implant_location else pl.lit(True),
+            pl.col('electrode_group_name') == format_probe_name(filter_probe_letter) if filter_probe_letter else pl.lit(True),
+        )
         .group_by(pl.col('location'))
         .agg([
             pl.col('unit_id').n_unique().alias('units'), 
@@ -381,11 +384,17 @@ def table_insertions(
     filter_type: Literal['starts_with', 'contains'] = 'starts_with',
     case_sensitive: bool = True,
     include_right_hemisphere: bool = False,
+    filter_implant_location: str | None = None,
+    filter_probe_letter: str | None = None,
 ) -> pn.pane.Plotly:
     insertions: pl.DataFrame = (
         get_unit_location_query_df(filter_area=filter_area, filter_type=filter_type, case_sensitive=case_sensitive, include_right_hemisphere=include_right_hemisphere)
         .with_columns(
             insertion_id=pl.concat_str(pl.col('session_id', 'electrode_group_name', 'implant_location'), separator='_')
+        )
+        .filter(
+            pl.col('implant_location').str.contains(filter_implant_location) if filter_implant_location else pl.lit(True),
+            pl.col('electrode_group_name') == format_probe_name(filter_probe_letter) if filter_probe_letter else pl.lit(True),
         )
         # find fraction of probe + implant_location hits in this area out of all
         # placements of probes at this implant_location
@@ -421,9 +430,9 @@ def table_insertions(
         .select('implant', 'hole', 'probe', 'hits', 'total', 'rate')
     )
     column_filters = {
-    'implant': {'type': 'input', 'func': 'like', 'placeholder': 'like x'},
-    'hole': {'type': 'input', 'func': 'like', 'placeholder': 'like x'},
-    'probe': {'type': 'input', 'func': 'like', 'placeholder': 'like x'},
+    # 'implant': {'type': 'input', 'func': 'like', 'placeholder': 'like x'},
+    # 'hole': {'type': 'input', 'func': 'like', 'placeholder': 'like x'},
+    # 'probe': {'type': 'input', 'func': 'like', 'placeholder': 'like x'},
     'hits': {'type': 'input', 'func': '>', 'placeholder': '> x'},
     'rate': {'type': 'input', 'func': '>', 'placeholder': '> x'},
     'total': {'type': 'input', 'func': '>', 'placeholder': '> x'},
@@ -528,7 +537,7 @@ def plot_ccf_locations_2d(
                 ccf_utils.get_scatter_image(
                     ccf_locations_df=locations,
                     projection=projection, # type: ignore
-                    opacity_range=(0.5, 1.0),
+                    opacity_range=(0.7, 1.0),
                 ) * ([0, 0, 0, 1] if locations is other_area_ccf_locations else [1, 1, 1, 1]),
                 interpolation='none',
             )
@@ -548,7 +557,7 @@ filter_area = pn.widgets.TextInput(name='Search brain area', value=random_area, 
 toggle_case_sensitive = pn.widgets.Checkbox(name='Case sensitive', value=False)
 select_group_by = pn.widgets.Select(name='Group by', options=['session_id', 'subject_id'], value='subject_id')
 search_implant_location = pn.widgets.TextInput(name='Filter implant or hole', placeholder='e.g. "2002 E2" or "2002"')
-search_probe_letter = pn.widgets.TextInput(name='Filter probe', placeholder='e.g. "A" or "B"')
+search_probe_letter = pn.widgets.TextInput(name='Filter probe letter', placeholder='e.g. "A" or "B"')
 toggle_right_hemisphere = pn.widgets.Checkbox(name='Include right hemisphere', value=False)
 show_parent_brain_region = pn.widgets.Checkbox(name='Show parent structure in brain (faster)', value=False)
 toggle_whole_probe = pn.widgets.Checkbox(name='Show complete probe tracks', value=False)
@@ -566,8 +575,8 @@ search_insertion = dict(
 )
 bound_barplot_unit_locations = pn.bind(barplot_unit_locations, **search_area, group_by=select_group_by)
 bound_barplot_co_recorded_structures = pn.bind(barplot_co_recorded_structures, **search_area)
-bound_all_unit_counts_table = pn.bind(table_all_unit_counts, **search_area)
-bound_insertions_table = pn.bind(table_insertions, **search_area)
+bound_all_unit_counts_table = pn.bind(table_all_unit_counts, **search_area, **search_insertion)
+bound_insertions_table = pn.bind(table_insertions, **search_area, **search_insertion)
 bound_ccf_locations = pn.bind(
     plot_ccf_locations_2d, 
     **search_area, 
