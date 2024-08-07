@@ -357,6 +357,7 @@ def table_all_unit_counts(
         return [
             f'background-color: {get_color_hex(location)}' 
             if location in queried_units['location']
+            and filter_area
             else ''
             for location in location_series
         ]
@@ -514,7 +515,7 @@ def plot_ccf_locations_2d(
         
     if not filter_area: # if filter_area is empty, we just show the background brain volume
         areas = []
-    if show_parent_brain_region or len(queried_units['location'].unique().to_list()) > 1:
+    elif show_parent_brain_region or len(queried_units['location'].unique().to_list()) > 1:
         areas = queried_units['structure'].unique().to_list()
     else:
         areas = queried_units['location'].unique().to_list()
