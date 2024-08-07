@@ -13,6 +13,13 @@ import upath
 
 logger = logging.getLogger(__name__)
 
+RESOLUTION_UM = 25
+
+ORIGINAL_AXIS_TO_DIM: dict[str, int] = {'ap': 0, 'ml': 1, 'dv': 2}
+AXIS_TO_DIM = {'ap': 2, 'ml': 0, 'dv': 1}
+PROJECTION_TO_AXIS = {'sagittal': 'ml', 'coronal': 'ap', 'horizontal': 'dv'}
+PROJECTION_YX = {'sagittal': ('dv', 'ap'), 'coronal': ('dv', 'ml'), 'horizontal': ('ap', 'ml')}
+
 @functools.cache
 def get_ccf_volume(left_hemisphere = True, right_hemisphere=False) -> npt.NDArray:
     """
@@ -53,6 +60,12 @@ def get_ccf_volume(left_hemisphere = True, right_hemisphere=False) -> npt.NDArra
         return volume[:, volume.shape[1]//2:, :]
     return volume
 
+def get_ml_midpoint() -> float:
+    return RESOLUTION_UM * 0.5 * get_ccf_volume(
+        left_hemisphere=True,
+        right_hemisphere=True,
+    ).shape[ORIGINAL_AXIS_TO_DIM['ml']]
+    
 @functools.cache
 def get_ccf_structure_tree_df() -> pl.DataFrame:
     local_path = upath.UPath('//allen/programs/mindscope/workgroups/np-behavior/ccf_structure_tree_2017.csv')
@@ -200,7 +213,10 @@ def isin_numba(volume: npt.NDArray[np.uint32], ids: set[int]) -> npt.NDArray[np.
             result[i] = True
     return result.reshape(shape_a)
 
-def get_ccf_volume_binary_mask(ccf_acronym_or_id: str | int | None = None) -> npt.NDArray:
+def get_ccf_volume_binary_mask(
+    ccf_acronym_or_id: str | int | None = None,
+    include_right_hemisphere: bool = False,
+) -> npt.NDArray:
     """
     >>> volume = get_ccf_volume_binary_mask('MOs')
     >>> assert volume.any()
@@ -214,9 +230,9 @@ def get_ccf_volume_binary_mask(ccf_acronym_or_id: str | int | None = None) -> np
         for kind in ('gt', ):
             t0 = time.time()
             if kind == 'nonzero':
-                masked_volume = get_ccf_volume().nonzero()
+                masked_volume = get_ccf_volume(right_hemisphere=include_right_hemisphere).nonzero()
             else:
-                masked_volume = get_ccf_volume() > 0
+                masked_volume = get_ccf_volume(right_hemisphere=include_right_hemisphere) > 0
             logger.info(f"Masked volume with no ccf area fetched with {kind=!r} in {time.time() - t0:.2f}s")
         return masked_volume
     for kind in ('sort',): # ('table', 'sort', 'numba') 
@@ -227,7 +243,7 @@ def get_ccf_volume_binary_mask(ccf_acronym_or_id: str | int | None = None) -> np
             s = np.fromiter(ids, dtype=int)
         else:
             raise ValueError(f"Invalid kind {kind}")
-        v = get_ccf_volume()
+        v = get_ccf_volume(right_hemisphere=include_right_hemisphere)
         t0 = time.time()
         if kind == 'numba':
             masked_volume = isin_numba(v, s)
@@ -253,6 +269,7 @@ def get_acronyms_in_volume() -> set[str]:
 def get_ccf_projection(
     ccf_acronym_or_id: str | int | None = None,
     volume: npt.NDArray | None = None, 
+    include_right_hemisphere: bool = False,
     projection: Literal['sagittal', 'coronal', 'horizontal'] = 'horizontal', 
     slice_center_index: int | None = None, 
     thickness_indices: int | None = None,
@@ -265,7 +282,7 @@ def get_ccf_projection(
     >>> assert projection_img.any()
     """    
     if volume is None:
-        volume = get_ccf_volume_binary_mask(ccf_acronym_or_id)
+        volume = get_ccf_volume_binary_mask(ccf_acronym_or_id=ccf_acronym_or_id, include_right_hemisphere=include_right_hemisphere)
     axis_to_dim = {'ap': 0, 'ml': 1, 'dv': 2}
     projection_to_axis = {'sagittal': 'ml', 'coronal': 'ap', 'horizontal': 'dv'}
     projection_yx = {'sagittal': ('dv', 'ap'), 'coronal': ('dv', 'ml'), 'horizontal': ('ap', 'ml')}
