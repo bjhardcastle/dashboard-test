@@ -583,10 +583,11 @@ sidebar = pn.Column(
     filter_area,
     toggle_case_sensitive,
     toggle_right_hemisphere,
+    toggle_whole_probe,
+    pn.layout.Divider(),
     search_implant_location,
     search_probe_letter,
     toggle_implant_location_query_for_all_areas,
-    toggle_whole_probe,
 )
 pn.template.MaterialTemplate(
     site="DR dashboard",
