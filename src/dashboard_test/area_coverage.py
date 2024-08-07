@@ -11,6 +11,8 @@ import polars as pl
 
 import dashboard_test.ccf as ccf_utils
 
+pn.extension('plotly', 'tabulator', 'matplotlib')
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -212,7 +214,7 @@ def get_ccf_location_query_lf(
     logger.info(f"Filtered on area, found approx {approx_n_unique_locations} locations across {approx_n_unique_sessions} sessions: location.{filter_type}({filter_area}, {case_sensitive=}, {filter_implant_location=}, {whole_probe=})")
     return locations
 
-def plot_unit_locations_bar(
+def barplot_unit_locations(
     filter_area: str, 
     filter_type: Literal['starts_with', 'contains'] = 'starts_with',
     case_sensitive: bool = True,
@@ -243,7 +245,7 @@ def plot_unit_locations_bar(
     )
     return pn.pane.Plotly(fig)
 
-def plot_co_recorded_structures_bar(
+def barplot_co_recorded_structures(
     filter_area: str, 
     filter_type: Literal['starts_with', 'contains'] = 'starts_with',
     case_sensitive: bool = True,
@@ -367,13 +369,14 @@ def table_all_unit_counts(
         selectable=False,
         show_index=False,
         pagination=None,
-        height=400,
+        width=650,
+        height=430,
         stylesheets=[stylesheet],
     )
     tabulator.style.apply(background_color_queried_locations)
     return tabulator
 
-def table_holes_to_hit_areas(
+def table_insertions(
     filter_area: str, 
     filter_type: Literal['starts_with', 'contains'] = 'starts_with',
     case_sensitive: bool = True,
@@ -418,12 +421,12 @@ def table_holes_to_hit_areas(
         .select('implant', 'hole', 'probe', 'hits', 'total', 'rate')
     )
     column_filters = {
-    'implant': {'type': 'input', 'func': 'like', 'placeholder': 'Filter implant'},
-    'hole': {'type': 'input', 'func': 'like', 'placeholder': 'Filter hole'},
-    'probe': {'type': 'input', 'func': 'like', 'placeholder': 'Filter probe'},
-    'hits': {'type': 'input', 'func': '>', 'placeholder': 'Filter hits > x'},
-    'rate': {'type': 'input', 'func': '>', 'placeholder': 'Filter rate > x'},
-    'total': {'type': 'input', 'func': '>', 'placeholder': 'Filter total > x'},
+    'implant': {'type': 'input', 'func': 'like', 'placeholder': 'like x'},
+    'hole': {'type': 'input', 'func': 'like', 'placeholder': 'like x'},
+    'probe': {'type': 'input', 'func': 'like', 'placeholder': 'like x'},
+    'hits': {'type': 'input', 'func': '>', 'placeholder': '> x'},
+    'rate': {'type': 'input', 'func': '>', 'placeholder': '> x'},
+    'total': {'type': 'input', 'func': '>', 'placeholder': '> x'},
     }
 
     stylesheet = """
@@ -437,11 +440,12 @@ def table_holes_to_hit_areas(
         selectable=False,
         show_index=False,
         # theme="modern",
-        height=450,
+        # width=850,
         stylesheets=[stylesheet],
         header_filters=column_filters,
         layout='fit_columns', 
-        # width=650,
+        width=650,
+        height=650,
         groupby=['implant'],
         header_align='center', 
         text_align={'int': 'center', 'float': 'center', 'str': 'center'}, #! not working
@@ -506,6 +510,7 @@ def plot_ccf_locations_2d(
     else:
         areas = queried_units['location'].unique().to_list()
     logger.info(f"Adding {areas} to CCF image: {filter_area=}, {show_parent_brain_region=}")
+    plt.close('all') # close any existing figures else we'll eventually run out of memory
     fig, axes = plt.subplots(1, 2)
     depth_column = {"horizontal": "ccf_dv", "coronal": "ccf_ap", "sagittal":  "ccf_ml"}
     for ax, projection in zip(axes, depth_column.keys()):
@@ -535,7 +540,7 @@ def plot_ccf_locations_2d(
         for edge, spine in ax.spines.items():
             spine.set_visible(False)
     fig.tight_layout()
-    return pn.pane.Matplotlib(fig, tight=True, sizing_mode="stretch_width")
+    return pn.pane.Matplotlib(fig, tight=True, format="svg", sizing_mode="stretch_width")
 
 filter_type = pn.widgets.Select(name='Search type', options=['starts_with', 'contains'], value='starts_with')
 random_area = np.random.choice(get_good_units_df().filter(pl.col('unit_id').is_not_null(), ~pl.col('is_right_hemisphere'))['structure'].unique())
@@ -547,7 +552,7 @@ search_probe_letter = pn.widgets.TextInput(name='Filter probe', placeholder='e.g
 toggle_right_hemisphere = pn.widgets.Checkbox(name='Include right hemisphere', value=False)
 show_parent_brain_region = pn.widgets.Checkbox(name='Show parent structure in brain (faster)', value=False)
 toggle_whole_probe = pn.widgets.Checkbox(name='Show complete probe tracks', value=False)
-toggle_implant_location_query_for_all_areas = pn.widgets.Checkbox(name='Show insertions that hit other areas (requires filter on implant/hole)', value=False)
+toggle_implant_location_query_for_all_areas = pn.widgets.Checkbox(name='Show insertions that missed area (use with filter on implant/hole/probe)', value=False)
 
 search_area = dict(
     filter_area=filter_area,
@@ -559,10 +564,10 @@ search_insertion = dict(
     filter_implant_location=search_implant_location,
     filter_probe_letter=search_probe_letter,
 )
-bound_unit_locations_bar = pn.bind(plot_unit_locations_bar, **search_area, group_by=select_group_by)
-bound_co_recorded_structures_bar = pn.bind(plot_co_recorded_structures_bar, **search_area)
-bound_all_unit_counts_bar = pn.bind(table_all_unit_counts, **search_area)
-bound_holes_to_hit_areas = pn.bind(table_holes_to_hit_areas, **search_area)
+bound_barplot_unit_locations = pn.bind(barplot_unit_locations, **search_area, group_by=select_group_by)
+bound_barplot_co_recorded_structures = pn.bind(barplot_co_recorded_structures, **search_area)
+bound_all_unit_counts_table = pn.bind(table_all_unit_counts, **search_area)
+bound_insertions_table = pn.bind(table_insertions, **search_area)
 bound_ccf_locations = pn.bind(
     plot_ccf_locations_2d, 
     **search_area, 
@@ -572,27 +577,32 @@ bound_ccf_locations = pn.bind(
 )
 
 plot_column_a = pn.Column(
-    bound_all_unit_counts_bar,
-    bound_co_recorded_structures_bar,
+    bound_all_unit_counts_table,
+    pn.layout.Spacer(height=50),
+    bound_insertions_table,
 )
 plot_column_b = pn.Column(
     bound_ccf_locations,
-    bound_holes_to_hit_areas,
 )
 sidebar = pn.Column(
-    select_group_by,
-    filter_type,
-    filter_area,
-    toggle_case_sensitive,
-    toggle_right_hemisphere,
-    search_implant_location,
-    search_probe_letter,
-    toggle_implant_location_query_for_all_areas,
-    toggle_whole_probe,
+    pn.WidgetBox(
+        '', # name, can include markdown for title
+        select_group_by,
+        filter_type,
+        filter_area,
+        toggle_case_sensitive,
+        toggle_right_hemisphere,
+        pn.layout.Divider(margin=(10, 0, 15, 0)),
+        search_implant_location,
+        search_probe_letter,
+        toggle_implant_location_query_for_all_areas,
+        toggle_whole_probe,
+    ),
 )
 pn.template.MaterialTemplate(
     site="DR dashboard",
     title=__file__.split('\\')[-1].split('.py')[0].replace('_', ' ').title(),
     sidebar=[sidebar],
-    main=[pn.Row(plot_column_b, plot_column_a), bound_unit_locations_bar],
+    main=[pn.Row(plot_column_b, plot_column_a), bound_barplot_unit_locations, bound_barplot_co_recorded_structures,
+],
 ).servable()
