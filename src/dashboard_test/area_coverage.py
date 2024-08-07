@@ -127,8 +127,8 @@ def get_unit_location_query_df(
     
     units = (
         get_good_units_df()
-        .filter(pl.col('is_right_hemisphere').eq(False) if not include_right_hemisphere else pl.lit(True))
         .lazy()
+        .filter(pl.col('is_right_hemisphere').eq(False) if not include_right_hemisphere else pl.lit(True))
         .filter(location_expr)
         .sort('date', "location")
     ).collect()
@@ -511,7 +511,7 @@ def plot_ccf_locations_2d(
         for area in areas:
             ax.imshow(ccf_utils.get_ccf_projection(area, projection=projection, with_opacity=True, include_right_hemisphere=include_right_hemisphere))
         for locations in (ccf_locations, other_area_ccf_locations):
-            if locations is None:
+            if locations is other_area_ccf_locations:
                 continue
             locations: pl.DataFrame
             logger.info(f"Adding {ccf_locations.shape=} unit locations to {projection} image")
