@@ -127,8 +127,8 @@ def get_unit_location_query_df(
     
     units = (
         get_good_units_df()
-        .lazy()
         .filter(pl.col('is_right_hemisphere').eq(False) if not include_right_hemisphere else pl.lit(True))
+        .lazy()
         .filter(location_expr)
         .sort('date', "location")
     ).collect()
@@ -352,7 +352,6 @@ def table_all_unit_counts(
         return [
             f'background-color: {get_color_hex(location)}' 
             if location in queried_units['location']
-            and filter_area # don't color if all areas are queried
             else ''
             for location in location_series
         ]
@@ -412,8 +411,11 @@ def table_holes_to_hit_areas(
             pl.col('insertion_count_for_probe_hole_location').alias('total'),
         ])
         .unnest('fields')
-        .sort('rate', descending=True)
-        .select('implant', 'hole', 'probe', 'hits', 'rate', 'total')
+        .with_columns([
+            pl.col('hits').sum().over(pl.col('implant')).alias('total_hits_this_implant'),
+        ])
+        .sort(('total_hits_this_implant', 'hits', 'rate'), descending=True)
+        .select('implant', 'hole', 'probe', 'hits', 'total', 'rate')
     )
     column_filters = {
     'implant': {'type': 'input', 'func': 'like', 'placeholder': 'Filter implant'},
@@ -435,11 +437,12 @@ def table_holes_to_hit_areas(
         selectable=False,
         show_index=False,
         # theme="modern",
-        height=250,
+        height=450,
         stylesheets=[stylesheet],
         header_filters=column_filters,
         layout='fit_columns', 
         # width=650,
+        groupby=['implant'],
         header_align='center', 
         text_align={'int': 'center', 'float': 'center', 'str': 'center'}, #! not working
     )
@@ -498,7 +501,7 @@ def plot_ccf_locations_2d(
         
     if not filter_area: # if filter_area is empty, we just show the background brain volume
         areas = []
-    elif show_parent_brain_region or len(queried_units['location'].unique().to_list()) > 1:
+    if show_parent_brain_region or len(queried_units['location'].unique().to_list()) > 1:
         areas = queried_units['structure'].unique().to_list()
     else:
         areas = queried_units['location'].unique().to_list()
@@ -511,7 +514,7 @@ def plot_ccf_locations_2d(
         for area in areas:
             ax.imshow(ccf_utils.get_ccf_projection(area, projection=projection, with_opacity=True, include_right_hemisphere=include_right_hemisphere))
         for locations in (ccf_locations, other_area_ccf_locations):
-            if locations is other_area_ccf_locations:
+            if locations is None:
                 continue
             locations: pl.DataFrame
             logger.info(f"Adding {ccf_locations.shape=} unit locations to {projection} image")
@@ -520,7 +523,6 @@ def plot_ccf_locations_2d(
                 ccf_utils.get_scatter_image(
                     ccf_locations_df=locations,
                     projection=projection, # type: ignore
-                    include_right_hemisphere=include_right_hemisphere,
                     opacity_range=(0.5, 1.0),
                 ),
                 interpolation='none',
@@ -583,11 +585,10 @@ sidebar = pn.Column(
     filter_area,
     toggle_case_sensitive,
     toggle_right_hemisphere,
-    toggle_whole_probe,
-    pn.layout.Divider(),
     search_implant_location,
     search_probe_letter,
     toggle_implant_location_query_for_all_areas,
+    toggle_whole_probe,
 )
 pn.template.MaterialTemplate(
     site="DR dashboard",
