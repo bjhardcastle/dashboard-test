@@ -116,7 +116,9 @@ def parse_filter_area_inputs(
     filter_area: str,
     filter_type: Literal['starts_with', 'contains', 'children_of'],
     case_sensitive: bool,
-) -> tuple[str | list[str], Literal['eq', 'starts_with', 'contains', 'contains_any', 'is_in'], bool]:
+) -> tuple[str | list[str], Literal['starts_with', 'contains', 'contains_any'], bool]:
+    if not filter_area:
+        return filter_area, 'contains', case_sensitive
     if filter_type == 'children_of':
         filter_area = ",".join(
             ccf_utils.convert_ccf_acronyms_or_ids(id_)
@@ -136,7 +138,7 @@ def parse_filter_area_inputs(
     if not case_sensitive:
         filter_area = filter_area.lower() if isinstance(filter_area, str) else [v.lower() for v in filter_area]
     assert filter_type != 'children_of', "filter_type should have been converted to 'eq' or 'is_in'"
-    assert isinstance(filter_area, str) if filter_type == 'starts_with' else isinstance(filter_area, list), f"{filter_type=}, {filter_area=}"
+    assert isinstance(filter_area, list) if filter_type in ('contains_any',) else isinstance(filter_area, str), f"{filter_type=}, {filter_area=}"
     return filter_area, filter_type, case_sensitive
 
 @pn.cache
@@ -205,7 +207,7 @@ def get_ccf_location_query_lf(
         .with_columns((pl.col('ccf_ml') > ccf_utils.get_midline_ccf_ml()).alias('is_right_hemisphere'))
         .filter(pl.col('is_right_hemisphere').eq(False) if not include_right_hemisphere else pl.lit(True))
         .group_by('session_id', 'electrode_group_name').all()
-        .filter(*[pl.col('structure').list.contains(structure) for structure in queried_units['structure'].unique()])
+        .filter(*[pl.col('structure').list.contains(structure) if isinstance(filter_area, list) else pl.lit(True) for structure in queried_units['structure'].unique()])
         .explode(pl.all().exclude('session_id', 'electrode_group_name'))
         .join(
             other=(
@@ -608,7 +610,7 @@ def plot_ccf_locations_2d(
 
 filter_type = pn.widgets.Select(name='Search type', options=['starts_with', 'contains', "children_of"], value='children_of')
 random_area = np.random.choice(get_good_units_df().filter(pl.col('unit_id').is_not_null(), ~pl.col('is_right_hemisphere'))['structure'].unique())
-filter_area = pn.widgets.TextInput(name='Search brain area', value='VISp,LGd', styles={'font-weight': 'bold'})
+filter_area = pn.widgets.TextInput(name='Search brain area(s)', value='VISp,LGd', placeholder="comma-separated", styles={'font-weight': 'bold'})
 toggle_case_sensitive = pn.widgets.Checkbox(name='Case sensitive', value=True)
 select_group_by = pn.widgets.Select(name='Group by', options=['session_id', 'subject_id'], value='subject_id')
 search_implant_location = pn.widgets.TextInput(name='Filter implant or hole', placeholder='e.g. "2002 E2" or "2002"')
@@ -616,7 +618,7 @@ search_probe_letter = pn.widgets.TextInput(name='Filter probe letter', placehold
 toggle_right_hemisphere = pn.widgets.Checkbox(name='Include right hemisphere', value=False)
 show_parent_brain_region = pn.widgets.Checkbox(name='Show parent structure in brain (faster)', value=False)
 toggle_whole_probe = pn.widgets.Checkbox(name='Show complete probe tracks', value=True)
-toggle_implant_location_query_for_all_areas = pn.widgets.Checkbox(name='Show matching insertions that missed area', value=False)
+toggle_implant_location_query_for_all_areas = pn.widgets.Checkbox(name='Show matching insertions that missed area(s)', value=False)
 
 search_area = dict(
     filter_area=filter_area,
