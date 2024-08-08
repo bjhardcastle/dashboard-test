@@ -342,6 +342,14 @@ def table_all_unit_counts(
         .drop('selected')
         .with_row_index()
     )
+    column_filters = {
+        'location': {'type': 'input', 'func': 'like', 'placeholder': 'like x'},
+        'units': {'type': 'input', 'func': '<', 'placeholder': '< x'},
+        'sessions': {'type': 'input', 'func': '<', 'placeholder': '< x'},
+        'subjects': {'type': 'input', 'func': '<', 'placeholder': '< x'},
+        'description': {'type': 'input', 'func': 'like', 'placeholder': 'like x'},
+    }
+        
     color_discrete_map = {}
     for structure in all_unit_counts['structure'].unique():
         if structure in queried_units['structure']:
@@ -361,7 +369,7 @@ def table_all_unit_counts(
             else ''
             for location in location_series
         ]
-        
+
     stylesheet = """
     .tabulator-cell {
         font-size: 12px;
@@ -373,9 +381,11 @@ def table_all_unit_counts(
         selectable=False,
         show_index=False,
         pagination=None,
+        layout='fit_columns', 
         width=650,
         height=430,
         stylesheets=[stylesheet],
+        header_filters=column_filters,
     )
     tabulator.style.apply(background_color_queried_locations)
     return tabulator
