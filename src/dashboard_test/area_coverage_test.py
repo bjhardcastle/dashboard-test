@@ -111,23 +111,50 @@ def apply_unit_count_group_by(
             pl.col('electrode_group_name').first(),
         ])
     )
-    
+
+def parse_filter_area_inputs(
+    filter_area: str,
+    filter_type: Literal['starts_with', 'contains', 'children_of'],
+    case_sensitive: bool,
+) -> tuple[str | list[str], Literal['eq', 'starts_with', 'contains', 'contains_any', 'is_in'], bool]:
+    if filter_type == 'children_of':
+        filter_area = ",".join(
+            ccf_utils.convert_ccf_acronyms_or_ids(id_)
+            for area in filter_area.split(',')
+            for id_ in ccf_utils.get_ccf_children_ids_in_volume(area.strip())
+        )
+        if len(filter_area) == 0:
+            raise ValueError(f"No children found for {filter_area=}")
+        if not case_sensitive:
+            logger.warning(f"Using 'case_sensitive' for {filter_area=}")
+            case_sensitive = True
+    if "," in filter_area:
+        logger.warning(f"Using 'contains_any' filter type for {filter_area=}")
+        filter_type = 'contains_any' # type: ignore
+        logger.warning(f"Converting {filter_area=} to list")
+        filter_area = [v.strip() for v in filter_area.split(",")] # type: ignore
+    if not case_sensitive:
+        filter_area = filter_area.lower() if isinstance(filter_area, str) else [v.lower() for v in filter_area]
+    assert filter_type != 'children_of', "filter_type should have been converted to 'eq' or 'is_in'"
+    assert isinstance(filter_area, str) if filter_type == 'starts_with' else isinstance(filter_area, list), f"{filter_type=}, {filter_area=}"
+    return filter_area, filter_type, case_sensitive
+
 @pn.cache
 def get_unit_location_query_df(
     filter_area: str, 
-    filter_type: Literal['starts_with', 'contains', "contains_any"] = 'starts_with',
+    filter_type: Literal['starts_with', 'contains', "children_of"] = 'starts_with',
     case_sensitive: bool = True,
     include_right_hemisphere: bool = False,
 ) -> pl.DataFrame:
+    
+    filter_area, filter_type, case_sensitive = parse_filter_area_inputs(filter_area, filter_type, case_sensitive)
+            
     if not case_sensitive:
-        filter_area = filter_area.lower()
         location_col = pl.col('location').str.to_lowercase()
     else:
         location_col = pl.col('location')
-    if "," in filter_area:
-        filter_type = "contains_any"
-        logger.warning(f"Using 'contains_any' filter type for {filter_area=}")
-    location_expr = getattr(location_col.str, filter_type)(filter_area if filter_type != "contains_any" else [v.strip() for v in filter_area.split(",")])
+    
+    location_expr = getattr(location_col.str, filter_type)(filter_area)
     
     units = (
         get_good_units_df()
@@ -152,7 +179,7 @@ def get_ccf_location_query_lf(
     filter_probe_letter: str | None = None,
     whole_probe: bool = False,
 ) -> pl.LazyFrame:
-        
+    
     queried_units = get_unit_location_query_df(
         filter_area=filter_area,
         filter_type=filter_type,
@@ -160,6 +187,8 @@ def get_ccf_location_query_lf(
         include_right_hemisphere=include_right_hemisphere,
     )
     
+    filter_area, filter_type, case_sensitive = parse_filter_area_inputs(filter_area, filter_type, case_sensitive)
+        
     join_on = ['session_id', 'electrode_group_name']
     if not whole_probe:
         join_on.extend(["ccf_ap", "ccf_dv", "ccf_ml"])
@@ -175,6 +204,9 @@ def get_ccf_location_query_lf(
         })
         .with_columns((pl.col('ccf_ml') > ccf_utils.get_midline_ccf_ml()).alias('is_right_hemisphere'))
         .filter(pl.col('is_right_hemisphere').eq(False) if not include_right_hemisphere else pl.lit(True))
+        .group_by('session_id', 'electrode_group_name').all()
+        .filter(*[pl.col('structure').list.contains(structure) for structure in queried_units['structure'].unique()])
+        .explode(pl.all().exclude('session_id', 'electrode_group_name'))
         .join(
             other=(
                 get_component_lf('electrode_groups')
@@ -208,6 +240,7 @@ def get_ccf_location_query_lf(
             left_on='location',
         )  
     )
+    
     approx_n_unique_sessions = len(locations.select(pl.col('session_id').approx_n_unique()).collect())
     approx_n_unique_locations = len(locations.select(pl.col('location').approx_n_unique()).collect())
     logger.info(f"Filtered on area, found approx {approx_n_unique_locations} locations across {approx_n_unique_sessions} sessions: location.{filter_type}({filter_area}, {case_sensitive=}, {filter_implant_location=}, {whole_probe=})")
@@ -402,6 +435,11 @@ def table_insertions(
 ) -> pn.pane.Plotly:
     insertions: pl.DataFrame = (
         get_unit_location_query_df(filter_area=filter_area, filter_type=filter_type, case_sensitive=case_sensitive, include_right_hemisphere=include_right_hemisphere)
+        .join(
+            get_ccf_location_query_lf(filter_area=filter_area, filter_type=filter_type, case_sensitive=case_sensitive, include_right_hemisphere=include_right_hemisphere, filter_implant_location=filter_implant_location, filter_probe_letter=filter_probe_letter).collect(),
+            on=('session_id', 'electrode_group_name'),
+            how="semi", 
+        )
         .with_columns(
             insertion_id=pl.concat_str(pl.col('session_id', 'electrode_group_name', 'implant_location'), separator='_')
         )
@@ -415,7 +453,10 @@ def table_insertions(
             other=(
                 get_good_units_df()
                 .group_by('electrode_group_name', 'implant_location')
-                .agg(pl.col('session_id').n_unique().alias('insertion_count_for_probe_hole_location'))
+                .agg([
+                    pl.col('session_id').n_unique().alias('insertion_count_for_probe_hole_location'),
+                    # pl.col('location')
+                ])
             ),
             on=('electrode_group_name', 'implant_location'),
         )
@@ -565,16 +606,16 @@ def plot_ccf_locations_2d(
     fig.tight_layout()
     return pn.pane.Matplotlib(fig, tight=True, format="svg", sizing_mode="stretch_width")
 
-filter_type = pn.widgets.Select(name='Search type', options=['starts_with', 'contains'], value='starts_with')
+filter_type = pn.widgets.Select(name='Search type', options=['starts_with', 'contains', "children_of"], value='children_of')
 random_area = np.random.choice(get_good_units_df().filter(pl.col('unit_id').is_not_null(), ~pl.col('is_right_hemisphere'))['structure'].unique())
-filter_area = pn.widgets.TextInput(name='Search brain area', value='MOs,ACA', styles={'font-weight': 'bold'})
-toggle_case_sensitive = pn.widgets.Checkbox(name='Case sensitive', value=False)
+filter_area = pn.widgets.TextInput(name='Search brain area', value='VISp,LGd', styles={'font-weight': 'bold'})
+toggle_case_sensitive = pn.widgets.Checkbox(name='Case sensitive', value=True)
 select_group_by = pn.widgets.Select(name='Group by', options=['session_id', 'subject_id'], value='subject_id')
 search_implant_location = pn.widgets.TextInput(name='Filter implant or hole', placeholder='e.g. "2002 E2" or "2002"')
 search_probe_letter = pn.widgets.TextInput(name='Filter probe letter', placeholder='e.g. "A" or "B"')
 toggle_right_hemisphere = pn.widgets.Checkbox(name='Include right hemisphere', value=False)
 show_parent_brain_region = pn.widgets.Checkbox(name='Show parent structure in brain (faster)', value=False)
-toggle_whole_probe = pn.widgets.Checkbox(name='Show complete probe tracks', value=False)
+toggle_whole_probe = pn.widgets.Checkbox(name='Show complete probe tracks', value=True)
 toggle_implant_location_query_for_all_areas = pn.widgets.Checkbox(name='Show matching insertions that missed area', value=False)
 
 search_area = dict(
