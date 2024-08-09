@@ -11,16 +11,19 @@ import polars as pl
 
 import dashboard_test.ccf as ccf_utils
 
-pn.extension('plotly', 'tabulator', 'matplotlib')
-
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+pn.extension('plotly', 'tabulator', 'matplotlib', 'terminal', console_output='disable')
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
+logger = logging.getLogger()
+
+DPRIME_THRESHOLD = 1.0
+ISI_VIOLATIONS_RATIO_THRESHOLD = 0.5
+AMPLITUDE_CUTOFF_THRESHOLD = 0.1
+PRESENCE_RATIO_THRESHOLD = 0.95
 
 @pn.cache
 def get_component_lf(nwb_component: npc_lims.NWBComponentStr) -> pl.LazyFrame:
@@ -43,8 +46,8 @@ def get_good_units_df() -> pl.DataFrame:
             other=(
                 get_component_lf("performance")
                 .filter(
-                    pl.col('same_modal_dprime') > 1.0,
-                    pl.col('cross_modal_dprime') > 1.0,
+                    pl.col('same_modal_dprime') > DPRIME_THRESHOLD,
+                    pl.col('cross_modal_dprime') > DPRIME_THRESHOLD,
                 )
                 .group_by(
                     pl.col('session_id')).agg(
@@ -62,9 +65,9 @@ def get_good_units_df() -> pl.DataFrame:
             other=(
                 get_component_lf("units")
                 .filter(
-                    pl.col('isi_violations_ratio') < 0.5,
-                    pl.col('amplitude_cutoff') < 0.1,
-                    pl.col('presence_ratio') > 0.95,
+                    pl.col('isi_violations_ratio') < ISI_VIOLATIONS_RATIO_THRESHOLD,
+                    pl.col('amplitude_cutoff') < AMPLITUDE_CUTOFF_THRESHOLD,
+                    pl.col('presence_ratio') > PRESENCE_RATIO_THRESHOLD,
                 )
             ),
             on='session_id',
@@ -127,6 +130,10 @@ def parse_filter_area_inputs(
         )
         if len(filter_area) == 0:
             raise ValueError(f"No children found for {filter_area=}")
+        if not "," in filter_area:
+            filter_type = 'contains'
+        else:
+            filter_type = 'contains_any'
         if not case_sensitive:
             logger.warning(f"Using 'case_sensitive' for {filter_area=}")
             case_sensitive = True
@@ -137,7 +144,7 @@ def parse_filter_area_inputs(
         filter_area = [v.strip() for v in filter_area.split(",")] # type: ignore
     if not case_sensitive:
         filter_area = filter_area.lower() if isinstance(filter_area, str) else [v.lower() for v in filter_area]
-    assert filter_type != 'children_of', "filter_type should have been converted to 'eq' or 'is_in'"
+    assert filter_type != 'children_of', "filter_type should have been converted to 'contains_any'"
     assert isinstance(filter_area, list) if filter_type in ('contains_any',) else isinstance(filter_area, str), f"{filter_type=}, {filter_area=}"
     return filter_area, filter_type, case_sensitive
 
@@ -386,7 +393,7 @@ def table_all_unit_counts(
         'subjects': {'type': 'input', 'func': '<', 'placeholder': '< x'},
         'description': {'type': 'input', 'func': 'like', 'placeholder': 'like x'},
     }
-        
+
     color_discrete_map = {}
     for structure in all_unit_counts['structure'].unique():
         if structure in queried_units['structure']:
@@ -419,8 +426,9 @@ def table_all_unit_counts(
         show_index=False,
         pagination=None,
         layout='fit_columns', 
-        width=650,
+        max_width=650,
         height=430,
+        widths={'description': "40%"},
         stylesheets=[stylesheet],
         header_filters=column_filters,
     )
@@ -457,17 +465,19 @@ def table_insertions(
                 .group_by('electrode_group_name', 'implant_location')
                 .agg([
                     pl.col('session_id').n_unique().alias('insertion_count_for_probe_hole_location'),
-                    # pl.col('location')
                 ])
             ),
             on=('electrode_group_name', 'implant_location'),
         )
+        .filter(pl.col('insertion_count_for_probe_hole_location') > 0)
         .group_by('electrode_group_name', 'implant_location')
         .agg([
-            (pl.col('insertion_id').n_unique() / pl.col('insertion_count_for_probe_hole_location')).first().round(2).alias('rate'),
+            (pl.col('insertion_id').n_unique() / pl.col('insertion_count_for_probe_hole_location').first()).alias('rate'),
             pl.col('insertion_id').n_unique().alias('hits'),
             pl.col('insertion_count_for_probe_hole_location').first(),
         ])
+        .filter(pl.col('rate').is_not_null())
+        .with_columns(rate=pl.col('rate').round(2))
         # split location into implant and hole
         .with_columns([
             (
@@ -509,7 +519,7 @@ def table_insertions(
         stylesheets=[stylesheet],
         header_filters=column_filters,
         layout='fit_columns', 
-        width=650,
+        max_width=650,
         height=650,
         groupby=['implant'],
         header_align='center', 
@@ -606,19 +616,35 @@ def plot_ccf_locations_2d(
         for edge, spine in ax.spines.items():
             spine.set_visible(False)
     fig.tight_layout()
-    return pn.pane.Matplotlib(fig, tight=True, format="svg", sizing_mode="stretch_width")
+    return pn.pane.Matplotlib(fig, tight=True, format="svg", min_width=600, sizing_mode="stretch_width")
 
 filter_type = pn.widgets.Select(name='Search type', options=['starts_with', 'contains', "children_of"], value='children_of')
 random_area = np.random.choice(get_good_units_df().filter(pl.col('unit_id').is_not_null(), ~pl.col('is_right_hemisphere'))['structure'].unique())
-filter_area = pn.widgets.TextInput(name='Search brain area(s)', value='VISp,LGd', placeholder="comma-separated", styles={'font-weight': 'bold'})
+filter_area = pn.widgets.TextInput(name='Search brain area(s)', value=random_area, placeholder="comma-separated", styles={'font-weight': 'bold'})
 toggle_case_sensitive = pn.widgets.Checkbox(name='Case sensitive', value=True)
 select_group_by = pn.widgets.Select(name='Group by', options=['session_id', 'subject_id'], value='subject_id')
 search_implant_location = pn.widgets.TextInput(name='Filter implant or hole', placeholder='e.g. "2002 E2" or "2002"')
 search_probe_letter = pn.widgets.TextInput(name='Filter probe letter', placeholder='e.g. "A" or "B"')
 toggle_right_hemisphere = pn.widgets.Checkbox(name='Include right hemisphere', value=False)
-show_parent_brain_region = pn.widgets.Checkbox(name='Show parent structure in brain (faster)', value=False)
+toggle_parent_brain_region = pn.widgets.Checkbox(name='Show parent structure', value=False)
 toggle_whole_probe = pn.widgets.Checkbox(name='Show complete probe tracks', value=True)
 toggle_implant_location_query_for_all_areas = pn.widgets.Checkbox(name='Show matching insertions that missed area(s)', value=False)
+
+display_stats = pn.pane.Markdown(f"""
+## stats
+
+> units: {len(get_good_units_df())}
+> sessions: {len(get_good_units_df()['session_id'].unique())}
+> subjects: {len(get_good_units_df()['subject_id'].unique())}
+
+---
+
+cross-modal dprime > {DPRIME_THRESHOLD}
+same-modal dprime > {DPRIME_THRESHOLD}
+isi violations ratio < {ISI_VIOLATIONS_RATIO_THRESHOLD}
+amplitude cutoff < {AMPLITUDE_CUTOFF_THRESHOLD}
+presence ratio > {PRESENCE_RATIO_THRESHOLD}
+""")
 
 search_area = dict(
     filter_area=filter_area,
@@ -640,6 +666,7 @@ bound_ccf_locations = pn.bind(
     show_whole_probe_tracks=toggle_whole_probe,
     **search_insertion,
     show_implant_location_query_for_all_areas=toggle_implant_location_query_for_all_areas,
+    show_parent_brain_region=toggle_parent_brain_region,
 )
 
 plot_column_a = pn.Column(
@@ -657,17 +684,38 @@ sidebar = pn.Column(
         filter_type,
         filter_area,
         toggle_case_sensitive,
+        toggle_parent_brain_region,
         toggle_right_hemisphere,
         pn.layout.Divider(margin=(10, 0, 15, 0)),
         search_implant_location,
         search_probe_letter,
         toggle_implant_location_query_for_all_areas,
         toggle_whole_probe,
+        pn.layout.Divider(margin=(100, 0, 15, 0)),
+        display_stats,
     ),
 )
 pn.template.MaterialTemplate(
     site="DR dashboard",
     title=__file__.split('\\')[-1].split('.py')[0].replace('_', ' ').title(),
     sidebar=[sidebar],
-    main=[pn.Row(plot_column_a, plot_column_b), bound_barplot_unit_locations, bound_barplot_co_recorded_structures],
+    main=[
+        pn.Row(plot_column_a, plot_column_b),
+        bound_barplot_unit_locations,
+        bound_barplot_co_recorded_structures,
+        # pn.widgets.Debugger(
+        #     name='Debugger info level', level=logging.INFO, sizing_mode='stretch_both',
+        #     logger_names=['root'],
+        # )
+    ],
 ).servable()
+
+###### debugger crashes with:
+#
+#     widget_session_ids = set(m.document.session_context.id
+#                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+#   File "C:\Users\ben.hardcastle\github\dashboard-test\.venv\Lib\site-packages\panel\widgets\debugger.py", line 99, in <genexpr>
+#     tuple()) if m.document.session_context)
+#                 ^^^^^^^^^^
+# AttributeError: 'NoneType' object has no attribute 'document'
+# ERROR: 'NoneType' object has no attribute 'document'
