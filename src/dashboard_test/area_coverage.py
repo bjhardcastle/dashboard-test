@@ -382,8 +382,9 @@ def table_all_unit_counts(
         show_index=False,
         pagination=None,
         layout='fit_columns', 
-        width=650,
+        max_width=650,
         height=430,
+        widths={'description': "40%"},
         stylesheets=[stylesheet],
         header_filters=column_filters,
     )
@@ -464,7 +465,7 @@ def table_insertions(
         stylesheets=[stylesheet],
         header_filters=column_filters,
         layout='fit_columns', 
-        width=650,
+        max_width=650,
         height=650,
         groupby=['implant'],
         header_align='center', 
@@ -561,7 +562,7 @@ def plot_ccf_locations_2d(
         for edge, spine in ax.spines.items():
             spine.set_visible(False)
     fig.tight_layout()
-    return pn.pane.Matplotlib(fig, tight=True, format="svg", sizing_mode="stretch_width")
+    return pn.pane.Matplotlib(fig, tight=True, format="svg", min_width=600, sizing_mode="stretch_width")
 
 filter_type = pn.widgets.Select(name='Search type', options=['starts_with', 'contains'], value='starts_with')
 random_area = np.random.choice(get_good_units_df().filter(pl.col('unit_id').is_not_null(), ~pl.col('is_right_hemisphere'))['structure'].unique())
