@@ -646,8 +646,8 @@ select_group_by = pn.widgets.Select(name='Group by', options=['session_id', 'sub
 search_implant_location = pn.widgets.TextInput(name='Filter implant or hole', placeholder='e.g. "2002 E2" or "2002"')
 search_probe_letter = pn.widgets.TextInput(name='Filter probe letter', placeholder='e.g. "A" or "B"')
 toggle_right_hemisphere = pn.widgets.Checkbox(name='Include right hemisphere', value=False)
-show_parent_brain_region = pn.widgets.Checkbox(name='Show parent structure in brain (faster)', value=False)
-toggle_whole_probe = pn.widgets.Checkbox(name='Show complete probe tracks', value=False)
+toggle_parent_brain_region = pn.widgets.Checkbox(name='Show parent structure', value=False)
+toggle_whole_probe = pn.widgets.Checkbox(name='Show complete probe tracks', value=True)
 toggle_implant_location_query_for_all_areas = pn.widgets.Checkbox(name='Show matching insertions that missed area(s)', value=False)
 
 display_stats = pn.pane.Markdown(f"""
@@ -686,6 +686,7 @@ bound_ccf_locations = pn.bind(
     show_whole_probe_tracks=toggle_whole_probe,
     **search_insertion,
     show_implant_location_query_for_all_areas=toggle_implant_location_query_for_all_areas,
+    show_parent_brain_region=toggle_parent_brain_region,
 )
 
 plot_column_a = pn.Column(
@@ -703,6 +704,7 @@ sidebar = pn.Column(
         filter_type,
         filter_area,
         toggle_case_sensitive,
+        toggle_parent_brain_region,
         toggle_right_hemisphere,
         pn.layout.Divider(margin=(10, 0, 15, 0)),
         search_implant_location,
