@@ -11,14 +11,16 @@ import polars as pl
 
 import dashboard_test.ccf as ccf_utils
 
-pn.extension('plotly', 'tabulator', 'matplotlib', 'terminal', console_output='disable')
+pn.extension('plotly', 'tabulator', 'matplotlib')
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-logger = logging.getLogger()
 
 DPRIME_THRESHOLD = 1.0
 ISI_VIOLATIONS_RATIO_THRESHOLD = 0.5
@@ -117,36 +119,30 @@ def apply_unit_count_group_by(
 
 def parse_filter_area_inputs(
     filter_area: str,
-    filter_type: Literal['starts_with', 'contains', 'children_of'],
+    return_filter_type: Literal['starts_with', 'contains', 'children_of'],
     case_sensitive: bool,
-) -> tuple[str | list[str], Literal['starts_with', 'contains', 'contains_any'], bool]:
+) -> tuple[list[str], Literal['starts_with', 'contains', 'eq'], bool]:
     if not filter_area:
-        return filter_area, 'contains', case_sensitive
-    if filter_type == 'children_of':
-        filter_area = ",".join(
-            ccf_utils.convert_ccf_acronyms_or_ids(id_)
+        return [""], 'contains', False
+    return_filter_area_list: list[str]
+    if return_filter_type == 'children_of':
+        return_filter_area_list = list(
+            ccf_utils.convert_ccf_acronyms_or_ids(id_) # type: ignore
             for area in filter_area.split(',')
             for id_ in ccf_utils.get_ccf_children_ids_in_volume(area.strip())
         )
-        if len(filter_area) == 0:
+        if len(return_filter_area_list) == 0:
             raise ValueError(f"No children found for {filter_area=}")
-        if not "," in filter_area:
-            filter_type = 'contains'
-        else:
-            filter_type = 'contains_any'
+        return_filter_type = 'eq'
         if not case_sensitive:
             logger.warning(f"Using 'case_sensitive' for {filter_area=}")
             case_sensitive = True
-    if "," in filter_area:
-        logger.warning(f"Using 'contains_any' filter type for {filter_area=}")
-        filter_type = 'contains_any' # type: ignore
-        logger.warning(f"Converting {filter_area=} to list")
-        filter_area = [v.strip() for v in filter_area.split(",")] # type: ignore
+    else:
+        return_filter_area_list = [v.strip() for v in filter_area.split(",")] # type: ignore
     if not case_sensitive:
-        filter_area = filter_area.lower() if isinstance(filter_area, str) else [v.lower() for v in filter_area]
-    assert filter_type != 'children_of', "filter_type should have been converted to 'contains_any'"
-    assert isinstance(filter_area, list) if filter_type in ('contains_any',) else isinstance(filter_area, str), f"{filter_type=}, {filter_area=}"
-    return filter_area, filter_type, case_sensitive
+        return_filter_area_list = [v.lower() for v in filter_area]
+    assert return_filter_type != 'children_of', "filter_type should have been converted to 'eq'"
+    return return_filter_area_list, return_filter_type, case_sensitive
 
 @pn.cache
 def get_unit_location_query_df(
@@ -156,20 +152,25 @@ def get_unit_location_query_df(
     include_right_hemisphere: bool = False,
 ) -> pl.DataFrame:
     
-    filter_area, filter_type, case_sensitive = parse_filter_area_inputs(filter_area, filter_type, case_sensitive)
+    filter_area_list, updated_filter_type, case_sensitive = parse_filter_area_inputs(filter_area, filter_type, case_sensitive)
             
     if not case_sensitive:
-        location_col = pl.col('location').str.to_lowercase()
+        namespace = pl.col('location').str.to_lowercase()
     else:
-        location_col = pl.col('location')
+        namespace = pl.col('location')
+        
+    if updated_filter_type != 'eq':
+        namespace = namespace.str # type: ignore
     
-    location_expr = getattr(location_col.str, filter_type)(filter_area)
+    location_exprs = pl.lit(False)
+    for area in filter_area_list:
+        location_exprs |= getattr(namespace, updated_filter_type)(area)
     
     units = (
         get_good_units_df()
         .filter(pl.col('is_right_hemisphere').eq(False) if not include_right_hemisphere else pl.lit(True))
         .lazy()
-        .filter(location_expr)
+        .filter(location_exprs)
         .sort('date', "location")
     ).collect()
     logger.info(f"Filtered on area, found {len(units['location'].unique())} locations across {len(units['session_id'].unique())} sessions: location.{filter_type}({filter_area}, {case_sensitive=})")
@@ -181,7 +182,7 @@ def format_probe_name(probe_name: str) -> str:
 @pn.cache
 def get_ccf_location_query_lf(
     filter_area: str,
-    filter_type: Literal['starts_with', 'contains'] = 'starts_with',
+    filter_type: Literal['starts_with', 'contains', 'children_of'] = 'starts_with',
     case_sensitive: bool = True,
     include_right_hemisphere: bool = False,
     filter_implant_location: str | None = None,
@@ -196,13 +197,32 @@ def get_ccf_location_query_lf(
         include_right_hemisphere=include_right_hemisphere,
     )
     
-    filter_area, filter_type, case_sensitive = parse_filter_area_inputs(filter_area, filter_type, case_sensitive)
-        
     join_on = ['session_id', 'electrode_group_name']
     if not whole_probe:
         join_on.extend(["ccf_ap", "ccf_dv", "ccf_ml"])
     join_on = tuple(join_on)    # type: ignore
 
+    def get_children_of_area(area: str) -> list[str]:
+        return list(
+            ccf_utils.convert_ccf_acronyms_or_ids(id_) # type: ignore
+            for id_ in ccf_utils.get_ccf_children_ids_in_volume(area.strip())
+        )
+    if not filter_area:
+        filter_exprs = pl.lit(True)
+    else:
+        filter_exprs = pl.lit(True)
+        for area in filter_area.split(','):
+            if filter_type == 'children_of':
+                filter_exprs &= (
+                    pl.col('structure').list.join(',').str.contains_any(get_children_of_area(area.strip()))
+                    | pl.col('location').list.join(',').str.contains_any(get_children_of_area(area.strip()))
+                )
+            else:
+                filter_exprs &= (
+                    pl.col('structure').list.join(',').str.contains(area.strip())   
+                    | pl.col('location').list.join(',').str.contains(area.strip())
+                )
+                
     locations = (
         get_component_lf('electrodes')
         .rename({
@@ -214,7 +234,7 @@ def get_ccf_location_query_lf(
         .with_columns((pl.col('ccf_ml') > ccf_utils.get_midline_ccf_ml()).alias('is_right_hemisphere'))
         .filter(pl.col('is_right_hemisphere').eq(False) if not include_right_hemisphere else pl.lit(True))
         .group_by('session_id', 'electrode_group_name').all()
-        .filter(*[pl.col('structure').list.contains(structure) if isinstance(filter_area, list) else pl.lit(True) for structure in queried_units['structure'].unique()])
+        .filter(filter_exprs)
         .explode(pl.all().exclude('session_id', 'electrode_group_name'))
         .join(
             other=(
@@ -618,9 +638,9 @@ def plot_ccf_locations_2d(
     fig.tight_layout()
     return pn.pane.Matplotlib(fig, tight=True, format="svg", min_width=600, sizing_mode="stretch_width")
 
-filter_type = pn.widgets.Select(name='Search type', options=['starts_with', 'contains', "children_of"], value='children_of')
+filter_type = pn.widgets.Select(name='Filter type', options=['starts_with', 'contains', "children_of"], value='children_of')
 random_area = np.random.choice(get_good_units_df().filter(pl.col('unit_id').is_not_null(), ~pl.col('is_right_hemisphere'))['structure'].unique())
-filter_area = pn.widgets.TextInput(name='Search brain area(s)', value=random_area, placeholder="comma-separated", styles={'font-weight': 'bold'})
+filter_area = pn.widgets.TextInput(name='Filter brain area(s) (comma separated)', value=random_area, placeholder='e.g. VISp, LGd', styles={'font-weight': 'bold'})
 toggle_case_sensitive = pn.widgets.Checkbox(name='Case sensitive', value=True)
 select_group_by = pn.widgets.Select(name='Group by', options=['session_id', 'subject_id'], value='subject_id')
 search_implant_location = pn.widgets.TextInput(name='Filter implant or hole', placeholder='e.g. "2002 E2" or "2002"')
@@ -699,23 +719,5 @@ pn.template.MaterialTemplate(
     site="DR dashboard",
     title=__file__.split('\\')[-1].split('.py')[0].replace('_', ' ').title(),
     sidebar=[sidebar],
-    main=[
-        pn.Row(plot_column_a, plot_column_b),
-        bound_barplot_unit_locations,
-        bound_barplot_co_recorded_structures,
-        # pn.widgets.Debugger(
-        #     name='Debugger info level', level=logging.INFO, sizing_mode='stretch_both',
-        #     logger_names=['root'],
-        # )
-    ],
+    main=[pn.Row(plot_column_a, plot_column_b), bound_barplot_unit_locations, bound_barplot_co_recorded_structures],
 ).servable()
-
-###### debugger crashes with:
-#
-#     widget_session_ids = set(m.document.session_context.id
-#                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-#   File "C:\Users\ben.hardcastle\github\dashboard-test\.venv\Lib\site-packages\panel\widgets\debugger.py", line 99, in <genexpr>
-#     tuple()) if m.document.session_context)
-#                 ^^^^^^^^^^
-# AttributeError: 'NoneType' object has no attribute 'document'
-# ERROR: 'NoneType' object has no attribute 'document'
