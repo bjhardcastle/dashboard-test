@@ -119,32 +119,30 @@ def apply_unit_count_group_by(
 
 def parse_filter_area_inputs(
     filter_area: str,
-    filter_type: Literal['starts_with', 'contains', 'children_of'],
+    return_filter_type: Literal['starts_with', 'contains', 'children_of'],
     case_sensitive: bool,
-) -> tuple[str | list[str], Literal['starts_with', 'contains', 'contains_any'], bool]:
+) -> tuple[list[str], Literal['starts_with', 'contains', 'eq'], bool]:
     if not filter_area:
-        return filter_area, 'contains', case_sensitive
-    if filter_type == 'children_of':
-        filter_area = ",".join(
-            ccf_utils.convert_ccf_acronyms_or_ids(id_)
+        return [""], 'contains', False
+    return_filter_area_list: list[str]
+    if return_filter_type == 'children_of':
+        return_filter_area_list = list(
+            ccf_utils.convert_ccf_acronyms_or_ids(id_) # type: ignore
             for area in filter_area.split(',')
             for id_ in ccf_utils.get_ccf_children_ids_in_volume(area.strip())
         )
-        if len(filter_area) == 0:
+        if len(return_filter_area_list) == 0:
             raise ValueError(f"No children found for {filter_area=}")
+        return_filter_type = 'eq'
         if not case_sensitive:
             logger.warning(f"Using 'case_sensitive' for {filter_area=}")
             case_sensitive = True
-    if "," in filter_area:
-        logger.warning(f"Using 'contains_any' filter type for {filter_area=}")
-        filter_type = 'contains_any' # type: ignore
-        logger.warning(f"Converting {filter_area=} to list")
-        filter_area = [v.strip() for v in filter_area.split(",")] # type: ignore
+    else:
+        return_filter_area_list = [v.strip() for v in filter_area.split(",")] # type: ignore
     if not case_sensitive:
-        filter_area = filter_area.lower() if isinstance(filter_area, str) else [v.lower() for v in filter_area]
-    assert filter_type != 'children_of', "filter_type should have been converted to 'eq' or 'is_in'"
-    assert isinstance(filter_area, list) if filter_type in ('contains_any',) else isinstance(filter_area, str), f"{filter_type=}, {filter_area=}"
-    return filter_area, filter_type, case_sensitive
+        return_filter_area_list = [v.lower() for v in filter_area]
+    assert return_filter_type != 'children_of', "filter_type should have been converted to 'eq'"
+    return return_filter_area_list, return_filter_type, case_sensitive
 
 @pn.cache
 def get_unit_location_query_df(
