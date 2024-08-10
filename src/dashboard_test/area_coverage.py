@@ -22,6 +22,11 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
+DPRIME_THRESHOLD = 1.0
+ISI_VIOLATIONS_RATIO_THRESHOLD = 0.5
+AMPLITUDE_CUTOFF_THRESHOLD = 0.1
+PRESENCE_RATIO_THRESHOLD = 0.95
+
 @pn.cache
 def get_component_lf(nwb_component: npc_lims.NWBComponentStr) -> pl.LazyFrame:
     path = npc_lims.get_cache_path(
@@ -43,8 +48,8 @@ def get_good_units_df() -> pl.DataFrame:
             other=(
                 get_component_lf("performance")
                 .filter(
-                    pl.col('same_modal_dprime') > 1.0,
-                    pl.col('cross_modal_dprime') > 1.0,
+                    pl.col('same_modal_dprime') > DPRIME_THRESHOLD,
+                    pl.col('cross_modal_dprime') > DPRIME_THRESHOLD,
                 )
                 .group_by(
                     pl.col('session_id')).agg(
@@ -62,9 +67,9 @@ def get_good_units_df() -> pl.DataFrame:
             other=(
                 get_component_lf("units")
                 .filter(
-                    pl.col('isi_violations_ratio') < 0.5,
-                    pl.col('amplitude_cutoff') < 0.1,
-                    pl.col('presence_ratio') > 0.95,
+                    pl.col('isi_violations_ratio') < ISI_VIOLATIONS_RATIO_THRESHOLD,
+                    pl.col('amplitude_cutoff') < AMPLITUDE_CUTOFF_THRESHOLD,
+                    pl.col('presence_ratio') > PRESENCE_RATIO_THRESHOLD,
                 )
             ),
             on='session_id',
@@ -620,6 +625,22 @@ show_parent_brain_region = pn.widgets.Checkbox(name='Show parent structure in br
 toggle_whole_probe = pn.widgets.Checkbox(name='Show complete probe tracks', value=False)
 toggle_implant_location_query_for_all_areas = pn.widgets.Checkbox(name='Show matching insertions that missed area(s)', value=False)
 
+display_stats = pn.pane.Markdown(f"""
+## stats
+
+> units: {len(get_good_units_df())}
+> sessions: {len(get_good_units_df()['session_id'].unique())}
+> subjects: {len(get_good_units_df()['subject_id'].unique())}
+
+---
+
+cross-modal dprime > {DPRIME_THRESHOLD}
+same-modal dprime > {DPRIME_THRESHOLD}
+isi violations ratio < {ISI_VIOLATIONS_RATIO_THRESHOLD}
+amplitude cutoff < {AMPLITUDE_CUTOFF_THRESHOLD}
+presence ratio > {PRESENCE_RATIO_THRESHOLD}
+""")
+
 search_area = dict(
     filter_area=filter_area,
     filter_type=filter_type,
@@ -663,6 +684,8 @@ sidebar = pn.Column(
         search_probe_letter,
         toggle_implant_location_query_for_all_areas,
         toggle_whole_probe,
+        pn.layout.Divider(margin=(100, 0, 15, 0)),
+        display_stats,
     ),
 )
 pn.template.MaterialTemplate(
