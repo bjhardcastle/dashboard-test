@@ -489,12 +489,15 @@ def table_insertions(
             ),
             on=('electrode_group_name', 'implant_location'),
         )
+        .filter(pl.col('insertion_count_for_probe_hole_location') > 0)
         .group_by('electrode_group_name', 'implant_location')
         .agg([
-            (pl.col('insertion_id').n_unique() / pl.col('insertion_count_for_probe_hole_location')).first().round(2).alias('rate'),
+            (pl.col('insertion_id').n_unique() / pl.col('insertion_count_for_probe_hole_location').first()).alias('rate'),
             pl.col('insertion_id').n_unique().alias('hits'),
             pl.col('insertion_count_for_probe_hole_location').first(),
         ])
+        .filter(pl.col('rate').is_not_null())
+        .with_columns(rate=pl.col('rate').round(2))
         # split location into implant and hole
         .with_columns([
             (
