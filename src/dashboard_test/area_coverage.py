@@ -638,9 +638,9 @@ def plot_ccf_locations_2d(
     fig.tight_layout()
     return pn.pane.Matplotlib(fig, tight=True, format="svg", min_width=600, sizing_mode="stretch_width")
 
-filter_type = pn.widgets.Select(name='Search type', options=['starts_with', 'contains', "children_of"], value='children_of')
+filter_type = pn.widgets.Select(name='Filter type', options=['starts_with', 'contains', "children_of"], value='children_of')
 random_area = np.random.choice(get_good_units_df().filter(pl.col('unit_id').is_not_null(), ~pl.col('is_right_hemisphere'))['structure'].unique())
-filter_area = pn.widgets.TextInput(name='Search brain area(s)', value=random_area, placeholder="comma-separated", styles={'font-weight': 'bold'})
+filter_area = pn.widgets.TextInput(name='Filter brain area(s) (comma separated)', value=random_area, placeholder='e.g. VISp, LGd', styles={'font-weight': 'bold'})
 toggle_case_sensitive = pn.widgets.Checkbox(name='Case sensitive', value=True)
 select_group_by = pn.widgets.Select(name='Group by', options=['session_id', 'subject_id'], value='subject_id')
 search_implant_location = pn.widgets.TextInput(name='Filter implant or hole', placeholder='e.g. "2002 E2" or "2002"')
