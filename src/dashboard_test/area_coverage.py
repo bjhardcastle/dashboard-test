@@ -152,20 +152,25 @@ def get_unit_location_query_df(
     include_right_hemisphere: bool = False,
 ) -> pl.DataFrame:
     
-    filter_area, filter_type, case_sensitive = parse_filter_area_inputs(filter_area, filter_type, case_sensitive)
+    filter_area_list, updated_filter_type, case_sensitive = parse_filter_area_inputs(filter_area, filter_type, case_sensitive)
             
     if not case_sensitive:
-        location_col = pl.col('location').str.to_lowercase()
+        namespace = pl.col('location').str.to_lowercase()
     else:
-        location_col = pl.col('location')
+        namespace = pl.col('location')
+        
+    if updated_filter_type != 'eq':
+        namespace = namespace.str # type: ignore
     
-    location_expr = getattr(location_col.str, filter_type)(filter_area)
+    location_exprs = pl.lit(False)
+    for area in filter_area_list:
+        location_exprs |= getattr(namespace, updated_filter_type)(area)
     
     units = (
         get_good_units_df()
         .filter(pl.col('is_right_hemisphere').eq(False) if not include_right_hemisphere else pl.lit(True))
         .lazy()
-        .filter(location_expr)
+        .filter(location_exprs)
         .sort('date', "location")
     ).collect()
     logger.info(f"Filtered on area, found {len(units['location'].unique())} locations across {len(units['session_id'].unique())} sessions: location.{filter_type}({filter_area}, {case_sensitive=})")
@@ -177,14 +182,14 @@ def format_probe_name(probe_name: str) -> str:
 @pn.cache
 def get_ccf_location_query_lf(
     filter_area: str,
-    filter_type: Literal['starts_with', 'contains'] = 'starts_with',
+    filter_type: Literal['starts_with', 'contains', 'children_of'] = 'starts_with',
     case_sensitive: bool = True,
     include_right_hemisphere: bool = False,
     filter_implant_location: str | None = None,
     filter_probe_letter: str | None = None,
     whole_probe: bool = False,
 ) -> pl.LazyFrame:
-        
+    
     queried_units = get_unit_location_query_df(
         filter_area=filter_area,
         filter_type=filter_type,
@@ -192,13 +197,32 @@ def get_ccf_location_query_lf(
         include_right_hemisphere=include_right_hemisphere,
     )
     
-    filter_area, filter_type, case_sensitive = parse_filter_area_inputs(filter_area, filter_type, case_sensitive)
-        
     join_on = ['session_id', 'electrode_group_name']
     if not whole_probe:
         join_on.extend(["ccf_ap", "ccf_dv", "ccf_ml"])
     join_on = tuple(join_on)    # type: ignore
 
+    def get_children_of_area(area: str) -> list[str]:
+        return list(
+            ccf_utils.convert_ccf_acronyms_or_ids(id_) # type: ignore
+            for id_ in ccf_utils.get_ccf_children_ids_in_volume(area.strip())
+        )
+    if not filter_area:
+        filter_exprs = pl.lit(True)
+    else:
+        filter_exprs = pl.lit(True)
+        for area in filter_area.split(','):
+            if filter_type == 'children_of':
+                filter_exprs &= (
+                    pl.col('structure').list.join(',').str.contains_any(get_children_of_area(area.strip()))
+                    | pl.col('location').list.join(',').str.contains_any(get_children_of_area(area.strip()))
+                )
+            else:
+                filter_exprs &= (
+                    pl.col('structure').list.join(',').str.contains(area.strip())   
+                    | pl.col('location').list.join(',').str.contains(area.strip())
+                )
+                
     locations = (
         get_component_lf('electrodes')
         .rename({
@@ -210,7 +234,7 @@ def get_ccf_location_query_lf(
         .with_columns((pl.col('ccf_ml') > ccf_utils.get_midline_ccf_ml()).alias('is_right_hemisphere'))
         .filter(pl.col('is_right_hemisphere').eq(False) if not include_right_hemisphere else pl.lit(True))
         .group_by('session_id', 'electrode_group_name').all()
-        .filter(*[pl.col('structure').list.contains(structure) if isinstance(filter_area, list) else pl.lit(True) for structure in queried_units['structure'].unique()])
+        .filter(filter_exprs)
         .explode(pl.all().exclude('session_id', 'electrode_group_name'))
         .join(
             other=(
