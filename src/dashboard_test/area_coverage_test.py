@@ -38,18 +38,21 @@ def get_component_lf(nwb_component: npc_lims.NWBComponentStr) -> pl.LazyFrame:
     return pl.scan_parquet(path)
 
 @pn.cache
-def get_good_units_df() -> pl.DataFrame:
-    good_units = (
+def get_good_units_df(good_units_sessions: bool = True) -> pl.DataFrame:
+    units = (
         get_component_lf("session")
         .filter(
             pl.col('keywords').list.contains('templeton').not_()
+            if good_units_sessions else pl.lit(True),
         )
         .join(
             other=(
                 get_component_lf("performance")
                 .filter(
-                    pl.col('same_modal_dprime') > DPRIME_THRESHOLD,
-                    pl.col('cross_modal_dprime') > DPRIME_THRESHOLD,
+                    (
+                        pl.col('same_modal_dprime') > DPRIME_THRESHOLD,
+                        pl.col('cross_modal_dprime') > DPRIME_THRESHOLD,
+                    ) if good_units_sessions else pl.lit(True),
                 )
                 .group_by(
                     pl.col('session_id')).agg(
@@ -57,7 +60,11 @@ def get_good_units_df() -> pl.DataFrame:
                         (pl.col('block_index').count() > 3).alias('pass'),
                     ],  
                 )
-                .filter('pass')
+                .filter(
+                    pl.col('pass') 
+                    if good_units_sessions 
+                    else pl.lit(True)
+                )
                 .drop('pass')
             ),
             on='session_id',
@@ -67,9 +74,11 @@ def get_good_units_df() -> pl.DataFrame:
             other=(
                 get_component_lf("units")
                 .filter(
-                    pl.col('isi_violations_ratio') < ISI_VIOLATIONS_RATIO_THRESHOLD,
-                    pl.col('amplitude_cutoff') < AMPLITUDE_CUTOFF_THRESHOLD,
-                    pl.col('presence_ratio') > PRESENCE_RATIO_THRESHOLD,
+                    (
+                        pl.col('isi_violations_ratio') < ISI_VIOLATIONS_RATIO_THRESHOLD,
+                        pl.col('amplitude_cutoff') < AMPLITUDE_CUTOFF_THRESHOLD,
+                        pl.col('presence_ratio') > PRESENCE_RATIO_THRESHOLD,
+                    ) if good_units_sessions else pl.lit(True),
                 )
             ),
             on='session_id',
@@ -92,8 +101,8 @@ def get_good_units_df() -> pl.DataFrame:
             left_on='location',
         )
     ).collect()
-    logger.info(f"Fetched {len(good_units)} good units")
-    return good_units
+    logger.info(f"Fetched {len(units)} {'good' if good_units_sessions else 'all'} units")
+    return units
 
 DataFrameOrLazyFrame = TypeVar("DataFrameOrLazyFrame", pl.DataFrame, pl.LazyFrame)
 
@@ -150,6 +159,7 @@ def get_unit_location_query_df(
     filter_type: Literal['starts_with', 'contains', "children_of"] = 'starts_with',
     case_sensitive: bool = True,
     include_right_hemisphere: bool = False,
+    good_units_sessions: bool = True,
 ) -> pl.DataFrame:
     
     filter_area_list, updated_filter_type, case_sensitive = parse_filter_area_inputs(filter_area, filter_type, case_sensitive)
@@ -167,7 +177,7 @@ def get_unit_location_query_df(
         location_exprs |= getattr(namespace, updated_filter_type)(area)
     
     units = (
-        get_good_units_df()
+        get_good_units_df(good_units_sessions=good_units_sessions)
         .filter(pl.col('is_right_hemisphere').eq(False) if not include_right_hemisphere else pl.lit(True))
         .lazy()
         .filter(location_exprs)
@@ -188,6 +198,7 @@ def get_ccf_location_query_lf(
     filter_implant_location: str | None = None,
     filter_probe_letter: str | None = None,
     whole_probe: bool = False,
+    good_units_sessions: bool = True,
 ) -> pl.LazyFrame:
     
     queried_units = get_unit_location_query_df(
@@ -195,6 +206,7 @@ def get_ccf_location_query_lf(
         filter_type=filter_type,
         case_sensitive=case_sensitive,
         include_right_hemisphere=include_right_hemisphere,
+        good_units_sessions=good_units_sessions,
     )
     
     join_on = ['session_id', 'electrode_group_name']
@@ -281,13 +293,20 @@ def barplot_unit_locations(
     case_sensitive: bool = True,
     include_right_hemisphere: bool = False,
     group_by: Literal['session_id', 'subject_id'] = 'subject_id',
+    good_units_sessions: bool = True,
 ) -> pn.pane.Plotly:
     
     if not filter_area:
         return pn.pane.Plotly(None)
 
     grouped_units = apply_unit_count_group_by(
-        get_unit_location_query_df(filter_area=filter_area, filter_type=filter_type, case_sensitive=case_sensitive, include_right_hemisphere=include_right_hemisphere)
+        get_unit_location_query_df(
+            filter_area=filter_area,
+            filter_type=filter_type,
+            case_sensitive=case_sensitive,
+            include_right_hemisphere=include_right_hemisphere,
+            good_units_sessions=good_units_sessions,
+            )
         )
     
     fig = px.bar(
@@ -298,7 +317,7 @@ def barplot_unit_locations(
         category_orders={"location": grouped_units['location'].unique().sort()},   # sort entries in legend
         labels={'location_count': 'units'}, 
         hover_data="session_id", 
-        title=f"breakdown of good units ({sum(grouped_units['location_count'])}) in good sessions ({grouped_units['session_id'].drop_nulls().n_unique()})", 
+        title=f"breakdown of {'good' if good_units_sessions else 'all'} units ({sum(grouped_units['location_count'])}) in {'good DR' if good_units_sessions else 'all'} sessions ({grouped_units['session_id'].drop_nulls().n_unique()})", 
     ) 
     fig.update_layout(
         autosize=True,
@@ -311,12 +330,19 @@ def barplot_co_recorded_structures(
     filter_type: Literal['starts_with', 'contains'] = 'starts_with',
     case_sensitive: bool = True,
     include_right_hemisphere: bool = False,
+    good_units_sessions: bool = True,
 ) -> pn.pane.Plotly:
     queried_units = (
-        get_unit_location_query_df(filter_area=filter_area, filter_type=filter_type, case_sensitive=case_sensitive, include_right_hemisphere=include_right_hemisphere)
+        get_unit_location_query_df(
+            filter_area=filter_area,
+            filter_type=filter_type,
+            case_sensitive=case_sensitive,
+            include_right_hemisphere=include_right_hemisphere,
+            good_units_sessions=good_units_sessions,
+            )
         )
     other_units = (
-        apply_unit_count_group_by(get_good_units_df())
+        apply_unit_count_group_by(get_good_units_df(good_units_sessions=good_units_sessions))
         .lazy()
         .filter(
             pl.col('session_id').is_in(queried_units['session_id'])
@@ -379,12 +405,19 @@ def table_all_unit_counts(
     include_right_hemisphere: bool = False,
     filter_implant_location: str | None = None,
     filter_probe_letter: str | None = None,
+    good_units_sessions: bool = True,
 ) -> pn.pane.Plotly:
     queried_units = (
-        get_unit_location_query_df(filter_area=filter_area, filter_type=filter_type, case_sensitive=case_sensitive, include_right_hemisphere=include_right_hemisphere)
+        get_unit_location_query_df(
+            filter_area=filter_area,
+            filter_type=filter_type,
+            case_sensitive=case_sensitive,
+            include_right_hemisphere=include_right_hemisphere,
+            good_units_sessions=good_units_sessions,
+            )
         )
     all_unit_counts =(
-        get_good_units_df()
+        get_good_units_df(good_units_sessions=good_units_sessions)
         .filter(
             pl.col('is_right_hemisphere').eq(False) if not include_right_hemisphere else pl.lit(True),
             pl.col('implant_location').str.contains(filter_implant_location) if filter_implant_location else pl.lit(True),
@@ -462,11 +495,26 @@ def table_insertions(
     include_right_hemisphere: bool = False,
     filter_implant_location: str | None = None,
     filter_probe_letter: str | None = None,
+    good_units_sessions: bool = True,
 ) -> pn.pane.Plotly:
     insertions: pl.DataFrame = (
-        get_unit_location_query_df(filter_area=filter_area, filter_type=filter_type, case_sensitive=case_sensitive, include_right_hemisphere=include_right_hemisphere)
+        get_unit_location_query_df(
+            filter_area=filter_area,
+            filter_type=filter_type,
+            case_sensitive=case_sensitive,
+            include_right_hemisphere=include_right_hemisphere,
+            good_units_sessions=good_units_sessions,
+        )
         .join(
-            get_ccf_location_query_lf(filter_area=filter_area, filter_type=filter_type, case_sensitive=case_sensitive, include_right_hemisphere=include_right_hemisphere, filter_implant_location=filter_implant_location, filter_probe_letter=filter_probe_letter).collect(),
+            get_ccf_location_query_lf(
+                filter_area=filter_area,
+                filter_type=filter_type,
+                case_sensitive=case_sensitive,
+                include_right_hemisphere=include_right_hemisphere,
+                filter_implant_location=filter_implant_location,
+                filter_probe_letter=filter_probe_letter,
+                good_units_sessions=good_units_sessions,
+            ).collect(),
             on=('session_id', 'electrode_group_name'),
             how="semi", 
         )
@@ -556,6 +604,7 @@ def plot_ccf_locations_2d(
     show_implant_location_query_for_all_areas: bool = False,
     show_whole_probe_tracks: bool = False,
     show_parent_brain_region: bool = False, # faster
+    good_units_sessions: bool = True,
 ) -> pn.pane.Matplotlib:
     
     queried_units = get_unit_location_query_df(
@@ -563,6 +612,7 @@ def plot_ccf_locations_2d(
         filter_type=filter_type,
         case_sensitive=case_sensitive,
         include_right_hemisphere=include_right_hemisphere,
+        good_units_sessions=good_units_sessions,
     )
     ccf_locations = (
         get_ccf_location_query_lf(
@@ -573,6 +623,7 @@ def plot_ccf_locations_2d(
             filter_implant_location=filter_implant_location,
             filter_probe_letter=filter_probe_letter,
             whole_probe=show_whole_probe_tracks,
+            good_units_sessions=good_units_sessions,
             )
     ).collect()
     if show_implant_location_query_for_all_areas:
@@ -588,6 +639,7 @@ def plot_ccf_locations_2d(
                 filter_implant_location=filter_implant_location,
                 filter_probe_letter=filter_probe_letter,
                 whole_probe=True,
+                good_units_sessions=good_units_sessions,
             )
             .join(
                 other=ccf_locations.lazy(),
@@ -649,28 +701,38 @@ toggle_right_hemisphere = pn.widgets.Checkbox(name='Include right hemisphere', v
 toggle_parent_brain_region = pn.widgets.Checkbox(name='Show parent structure', value=False)
 toggle_whole_probe = pn.widgets.Checkbox(name='Show complete probe tracks', value=True)
 toggle_implant_location_query_for_all_areas = pn.widgets.Checkbox(name='Show matching insertions that missed area(s)', value=False)
+toggle_good_units_passing_sessions = pn.widgets.Checkbox(name='Only good units from passing DR sessions', value=True)
 
-display_stats = pn.pane.Markdown(f"""
-## stats
+def display_stats(
+    good_units_sessions=True,
+) -> pn.pane.Markdown:
+    df = get_good_units_df(good_units_sessions=good_units_sessions)
+    stats = f"""
+### stats
 
-> units: {len(get_good_units_df())}
-> sessions: {len(get_good_units_df()['session_id'].unique())}
-> subjects: {len(get_good_units_df()['subject_id'].unique())}
+units `{len(df)}`
+sessions `{len(df['session_id'].unique())}`
+subjects `{len(df['subject_id'].unique())}`
+"""
+    if good_units_sessions:
+        stats += f"""
 
 ---
-
-cross-modal dprime > {DPRIME_THRESHOLD}
-same-modal dprime > {DPRIME_THRESHOLD}
-isi violations ratio < {ISI_VIOLATIONS_RATIO_THRESHOLD}
-amplitude cutoff < {AMPLITUDE_CUTOFF_THRESHOLD}
-presence ratio > {PRESENCE_RATIO_THRESHOLD}
-""")
+cross-modal dprime `> {DPRIME_THRESHOLD}`
+same-modal dprime `> {DPRIME_THRESHOLD}`
+isi violations ratio `< {ISI_VIOLATIONS_RATIO_THRESHOLD}`
+amplitude cutoff `< {AMPLITUDE_CUTOFF_THRESHOLD}`
+presence ratio `> {PRESENCE_RATIO_THRESHOLD}`
+""" 
+    return pn.pane.Markdown(stats)
+bound_display_stats = pn.bind(display_stats, good_units_sessions=toggle_good_units_passing_sessions)
 
 search_area = dict(
     filter_area=filter_area,
     filter_type=filter_type,
     case_sensitive=toggle_case_sensitive,
     include_right_hemisphere=toggle_right_hemisphere,
+    good_units_sessions=toggle_good_units_passing_sessions,
 )
 search_insertion = dict(
     filter_implant_location=search_implant_location,
@@ -704,15 +766,16 @@ sidebar = pn.Column(
         filter_type,
         filter_area,
         toggle_case_sensitive,
-        toggle_parent_brain_region,
+        toggle_good_units_passing_sessions,
         toggle_right_hemisphere,
+        toggle_parent_brain_region,
         pn.layout.Divider(margin=(10, 0, 15, 0)),
         search_implant_location,
         search_probe_letter,
         toggle_implant_location_query_for_all_areas,
         toggle_whole_probe,
-        pn.layout.Divider(margin=(100, 0, 15, 0)),
-        display_stats,
+        pn.layout.Divider(margin=(20, 0, 15, 0)),
+        bound_display_stats,
     ),
 )
 pn.template.MaterialTemplate(
