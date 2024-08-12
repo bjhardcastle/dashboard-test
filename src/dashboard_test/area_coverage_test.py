@@ -478,7 +478,7 @@ def table_all_unit_counts(
         selectable=False,
         show_index=False,
         pagination=None,
-        layout='fit_columns', 
+        layout='fit_data', 
         max_width=650,
         height=430,
         widths={'description': "40%"},
