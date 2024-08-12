@@ -2,6 +2,7 @@ import functools
 import logging
 import tempfile
 import time
+import concurrent.futures
 from typing import Iterable, Literal, TypeVar
 
 import nrrd
@@ -18,6 +19,7 @@ AXIS_TO_DIM = {'ml': 0, 'dv': 1, 'ap': 2}
 PROJECTION_TO_AXIS = {'sagittal': 'ml', 'coronal': 'ap', 'horizontal': 'dv'}
 PROJECTION_YX = {'sagittal': ('dv', 'ap'), 'coronal': ('dv', 'ml'), 'horizontal': ('ap', 'ml')}
 
+PROCESS_POOL_EXECUTOR = concurrent.futures.ProcessPoolExecutor()
 
 @functools.cache
 def get_ccf_volume(left_hemisphere = True, right_hemisphere=False) -> npt.NDArray:
@@ -256,6 +258,25 @@ def get_acronyms_in_volume() -> set[str]:
     >>> assert areas
     """
     return set(get_ccf_structure_tree_df().filter(pl.col('id').is_in(get_ids_in_volume()))['acronym'])
+
+def get_ccf_projection_parallel(
+    ccf_acronyms_or_ids: Iterable[str | int] | None = None,
+    **kwargs,
+) -> tuple[npt.NDArray, ...]:
+    if ccf_acronyms_or_ids is None:
+        return (get_ccf_projection(**kwargs), )
+    else:
+        future_to_acronym: dict[concurrent.futures.Future[npt.NDArray], int | str] = {}
+        for acronym_or_id in ccf_acronyms_or_ids:
+            future = PROCESS_POOL_EXECUTOR.submit(
+                get_ccf_projection, ccf_acronym_or_id=acronym_or_id, **kwargs,
+                )
+            future_to_acronym[future] = acronym_or_id
+        done, not_done = concurrent.futures.wait(future_to_acronym)
+        if len(done) != len(future_to_acronym):
+            # this should never happen
+            raise ValueError(f"Failed to get some projections: {[v for v in future_to_acronym[k] for k in not_done]}")
+        return tuple(future.result() for future in future_to_acronym)
 
 @functools.cache
 def get_ccf_projection(

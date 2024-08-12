@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import Literal, TypeVar
 
 import matplotlib.pyplot as plt
@@ -9,11 +10,11 @@ import panel as pn
 import plotly.express as px
 import polars as pl
 
-import dashboard_test.ccf as ccf_utils
+import dashboard_test.ccf_test as ccf_utils
 
 pn.extension('plotly', 'tabulator', 'matplotlib')
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 logging.basicConfig(
@@ -663,8 +664,14 @@ def plot_ccf_locations_2d(
     for ax, projection in zip(axes, depth_column.keys()):
         ax.imshow(ccf_utils.get_ccf_projection(projection=projection, include_right_hemisphere=include_right_hemisphere)) # whole brain in grey
         xlims, ylims = ax.get_xlim(), ax.get_ylim()
-        for area in areas:
-            ax.imshow(ccf_utils.get_ccf_projection(area, projection=projection, with_opacity=True, include_right_hemisphere=include_right_hemisphere))
+        t0 = time.time()
+        area_projections = ccf_utils.get_ccf_projection_parallel(
+            areas, projection=projection, with_opacity=True, include_right_hemisphere=include_right_hemisphere,
+        )
+        logger.info(f"Fetched {len(areas)} area projections in {time.time() - t0:.2f}s")
+        for area_projection in area_projections:
+            ax.imshow(area_projection)
+        logger.info(f"Added {len(areas)} area projections (parallel method) in {time.time() - t0:.2f}s")
         for locations in (ccf_locations, other_area_ccf_locations):
             if locations is None:
                 continue
