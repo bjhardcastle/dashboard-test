@@ -126,7 +126,8 @@ def try_run_sorting(session_id: str) -> None:
         logger.error(f"Failed to launch trigger capsule for {session_id}: {e}")
     else:
         logger.info(f"Launched trigger capsule for {session_id} with raw data asset {session.raw_data_asset.id}")
-        if latest_sorted_asset is not None: latest_sorted_asset_ids.append(latest_sorted_asset.id)
+        if latest_sorted_asset is not None: 
+            latest_sorted_asset_ids.append(latest_sorted_asset.id)
 
 
 width = 150
