@@ -17,14 +17,11 @@ dependencies = [
     "plotly>=5.20.0",
     "watchfiles>=0.21.0",
     "npc-lims>=0.1.168",
-    "brainglobe-heatmap @ git+https://github.com/bjhardcastle/brainglobe-heatmap",
     "jupyter-bokeh>=4.0.5",
-    "ONE-api>=2.8.1",
-    "ibllib>=2.38.0",
-    "pyvista>=0.44.1",
     "numba>=0.60.0",
+    "aind-session>=0.1.10",
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.12"
 readme = "README.md"
 license = {text = "MIT"}
 
@@ -33,4 +30,5 @@ requires = ["pdm-backend"]
 build-backend = "pdm.backend"
 
 [tool.pdm.scripts]
-panel = "panel serve src/dashboard_test/area_coverage.py --show --autoreload --address 10.128.37.38 --allow-websocket-origin=*"
+panel = "panel serve src/dashboard_test/area_coverage.py --show --autoreload --address 10.128.37.38 --allow-websocket-origin=* --global-loading-spinner"
+panel_test = "panel serve src/dashboard_test/sorting.py --show --autoreload --address 10.128.37.38 --port 8080 --allow-websocket-origin=*"
