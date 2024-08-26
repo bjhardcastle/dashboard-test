@@ -62,7 +62,7 @@ def get_sessions_table(
         sessions = ()
     else:
         sessions = get_sessions(subject_id, specific_date, start_date, end_date)
-    columns = ('subject', 'session', 'raw asset', 'latest sorted asset', 'jobs running', 'success', 'probes')
+    columns = ('subject', 'session', 'raw asset', 'latest sorted asset', 'jobs running', 'success', 'complete probe data')
     records = []
     current_sorting_computations = aind_session.search_computations(
         capsule_or_pipeline_id=aind_session.ecephys.SORTING_PIPELINE_ID,
@@ -84,7 +84,7 @@ def get_sessions_table(
             row["jobs running"] = [c.name for c in current_sorting_computations if any(asset.id == s.raw_data_asset.id for asset in c.data_assets)]
         with contextlib.suppress(Exception):
             row["success"] = int(not s.ecephys.is_sorting_fail)
-            row["probes"] = s.ecephys.sorted_probes
+            row["complete probe data"] = s.ecephys.sorted_probes
         records.append(row)
     if not records:
         df = pd.DataFrame(columns=columns)
@@ -137,10 +137,10 @@ def get_sessions_table(
     def callback(event):
         if event.column == 'trigger':
             try_run_sorting(df['session'].iloc[event.row])
-        else:
-            # table.row_content(df.iloc[event.row])
-            table.expanded = [event.row] if event.row not in table.expanded else []
-            table._update_children()
+        ## expand row
+        # else:
+        #     table.expanded = [event.row] if event.row not in table.expanded else []
+        #     table._update_children()
     table.on_click(callback)
     yield table
 
@@ -187,16 +187,23 @@ def app():
     end_date = pn.widgets.TextInput(name="End date", value="", width=width)
     usage_info = pn.pane.Alert(
         """
-        ## Usage
-        - Enter a subject ID, or multiple IDs separated by commas
-        - Expand a row in the table to view the contents of the "output" file from the session's latest sorted data asset
-        - `fail` indicates whether the latest sorted data asset shows signs of failure (based on number of files, certain words in the output file, etc.)
-        - `probes` indicates which probes successfully completed sorting in the latest sorted data asset
-        - Press the "reload" icon in the right-most column to run sorting for the session (via the trigger capsule)
-            - If the trigger capsule is currently running for the session it won't be re-run
-            - The sorting pipeline itself is not checked
+        ### Usage
+        Enter a subject ID, or multiple IDs separated by commas
+        - `jobs running` refers to current sorting pipeline computations with the session's raw data asset attached
+        - `success` reports whether the latest sorted data asset indicates any signs of failure (based on number of files, certain words in the output file, etc.)
+            - Expand a row in the table to view the contents of the "output" file from the session's latest sorted data asset
+        - `complete probe data` reports names of probes that reached the "curated" stage of sorting in the latest sorted data asset
+        
         - Most data from CodeOcean is cached with a time-to-live of 10 minutes
         
+        ### Run sorting
+        - Press the "reload" icon in the right-most column to run sorting for the session (via the trigger capsule) with default parameters
+            - If the trigger capsule is currently running for the session it won't be re-run
+            - The sorting pipeline itself is not checked
+        - The trigger capsule - and the sorting pipeline - will be run from Ben's account, so you won't be able to stop computations
+        - If you prefer to run the trigger capsule manually, grab the session's raw data asset ID from the expanded row in the table
+        
+        ### Links
         Trigger capsule: https://codeocean.allenneuraldynamics.org/capsule/6726080/tree
         Sorting pipeline: https://codeocean.allenneuraldynamics.org/capsule/8510735/tree
         """,
