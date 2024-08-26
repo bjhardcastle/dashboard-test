@@ -7,15 +7,11 @@ import pandas as pd
 import aind_session
 
 pn.config.theme = 'dark'
-
-pn.extension('tabulator', notifications=True)
+pn.config.notifications = True
+pn.extension('tabulator')
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-
-latest_sorted_asset_ids: list[str] = []
-"""For tracking which sessions have been triggered for sorting this
-runtime."""
 
 def get_sessions(
     subject_id: str,
