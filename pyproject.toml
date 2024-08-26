@@ -19,7 +19,7 @@ dependencies = [
     "npc-lims>=0.1.168",
     "jupyter-bokeh>=4.0.5",
     "numba>=0.60.0",
-    "aind-session>=0.1.10",
+    "aind-session>=0.1.12",
 ]
 requires-python = ">=3.11,<3.12"
 readme = "README.md"
@@ -30,5 +30,5 @@ requires = ["pdm-backend"]
 build-backend = "pdm.backend"
 
 [tool.pdm.scripts]
-panel = "panel serve src/dashboard_test/area_coverage.py --show --autoreload --address 10.128.37.38 --allow-websocket-origin=* --global-loading-spinner"
-panel_test = "panel serve src/dashboard_test/sorting.py --show --autoreload --address 10.128.37.38 --port 8080 --allow-websocket-origin=*"
+panel = "panel serve src/dashboard_test/area_coverage.py --admin --show --autoreload --address 10.128.37.38 --allow-websocket-origin=* --global-loading-spinner"
+panel_test = "panel serve src/dashboard_test/sorting.py --admin --show --autoreload --address 10.128.37.38 --port 8080 --allow-websocket-origin=*"
