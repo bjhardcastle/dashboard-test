@@ -36,13 +36,12 @@ def get_sessions(
     for subject in subjects:
         if subject is None:
             continue
-        try:
-            s = aind_session.get_sessions(
-                    subject_id=subject,
-                    platform='ecephys',
-                    **date_args,
-                )
-        except LookupError:
+        s = aind_session.get_sessions(
+                subject_id=subject,
+                platform='ecephys',
+                **date_args,
+            )
+        if not s:
             logger.info(f"No sessions found for {subject}")
             pn.state.notifications.warning(f"No sessions found for {subject}")
         else:
@@ -61,7 +60,7 @@ def get_sessions_table(
         sessions = ()
     else:
         sessions = get_sessions(subject_id, specific_date, start_date, end_date)
-    columns = ('session', 'raw asset', 'fail', 'probes')
+    columns = ('subject', 'session', 'raw asset', 'latest sorted asset', 'fail', 'probes')
     records = []
     for s in sessions:
         logger.info(f"Fetching info for {s.id}")
@@ -70,10 +69,11 @@ def get_sessions_table(
             None
         )
         row["session"] = s.id
+        row["subject"] = s.subject_id
         with contextlib.suppress(Exception):
             row["raw asset"] = s.raw_data_asset.id
-        # with contextlib.suppress(Exception):
-        #     row["latest sorted asset"] = s.ecephys.sorted_data_asset.id
+        with contextlib.suppress(Exception):
+            row["latest sorted asset"] = s.ecephys.sorted_data_asset.id
         with contextlib.suppress(Exception):
             row["fail"] = int(s.ecephys.is_sorting_fail)
         with contextlib.suppress(Exception):
@@ -109,10 +109,12 @@ def get_sessions_table(
     }
     """
     table = pn.widgets.Tabulator(
+        hidden_columns=['subject', 'latest sorted asset'],
+        groupby=['subject'],
         value=df,
         selectable=False,
+        disabled=True,
         show_index=False,
-        # layout='fit_columns',
         sizing_mode='stretch_width',
         row_content=content_fn,
         embed_content=True,
@@ -125,12 +127,13 @@ def get_sessions_table(
         }
     )
     def callback(event):
-        import pdb; pdb.set_trace()
         if event.column == 'trigger':
             try_run_sorting(df['session'].iloc[event.row])
-    table.on_click(
-        callback
-    )
+        else:
+            # table.row_content(df.iloc[event.row])
+            table.expanded = [event.row] if event.row not in table.expanded else []
+            table._update_children()
+    table.on_click(callback)
     return table
 
 def try_run_sorting(session_id: str) -> None:
