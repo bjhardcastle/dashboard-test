@@ -5,7 +5,7 @@
 groups = ["default"]
 strategy = ["cross_platform"]
 lock_version = "4.5.0"
-content_hash = "sha256:e169538d9581d147fbd32ddf0965c454b160d8f3571009c8a0b071ef994b422e"
+content_hash = "sha256:31a751129835d671d1c9781b8913c3a548085b740296a03a43bfa875eabd57ca"
 
 [[metadata.targets]]
 requires_python = ">=3.11,<3.12"
@@ -28,7 +28,7 @@ files = [
 
 [[package]]
 name = "aind-session"
-version = "0.1.12"
+version = "0.1.17"
 requires_python = "<3.12,>=3.9"
 summary = "User-friendly tools for accessing paths, metadata and assets related to AIND sessions."
 dependencies = [
@@ -37,8 +37,8 @@ dependencies = [
     "npc-session>=0.1.39",
 ]
 files = [
-    {file = "aind_session-0.1.12-py3-none-any.whl", hash = "sha256:112af476935033080ffb1bc14fe5165d1a24936653e0e2b3d6ab87f224605609"},
-    {file = "aind_session-0.1.12.tar.gz", hash = "sha256:14055361aac9b69616172b8f39936a4bf57df1331abbf6a1ca1c5e092d428899"},
+    {file = "aind_session-0.1.17-py3-none-any.whl", hash = "sha256:a2a49e6872e5248dbc94a7d33cbaeebfc18d18ab641a25efd3d6030f8253cd2c"},
+    {file = "aind_session-0.1.17.tar.gz", hash = "sha256:8855e4c1cfcba7d7f36f13d8cbe162a587117368db5042005c5e125f01ef9760"},
 ]
 
 [[package]]

@@ -19,7 +19,7 @@ dependencies = [
     "npc-lims>=0.1.168",
     "jupyter-bokeh>=4.0.5",
     "numba>=0.60.0",
-    "aind-session>=0.1.12",
+    "aind-session>=0.1.17",
 ]
 requires-python = ">=3.11,<3.12"
 readme = "README.md"
