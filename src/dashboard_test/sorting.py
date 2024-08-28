@@ -1,6 +1,7 @@
 import contextlib
 import logging
 import pathlib
+import concurrent.futures
 
 import npc_session
 import panel as pn
@@ -13,6 +14,8 @@ pn.extension('tabulator')
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
+executor = concurrent.futures.ThreadPoolExecutor()
 
 def get_sessions(
     subject_id: str,
@@ -70,7 +73,8 @@ def get_sessions_table(
         ttl_hash=aind_session.get_ttl_hash(20),
     )
     # import pdb; pdb.set_trace()
-    for s in sessions:
+    logger.info(f"Submitting {len(sessions)} jobs to threadpool")
+    def get_row(s: aind_session.Session):
         logger.info(f"Fetching info for {s.id}")
         row = dict.fromkeys(
             columns,
@@ -83,8 +87,11 @@ def get_sessions_table(
             row["latest sorted asset"] = s.ecephys.sorted_data_asset.id
             row["jobs running"] = [c.name for c in current_sorting_computations if any(asset.id == s.raw_data_asset.id for asset in c.data_assets)]
         with contextlib.suppress(Exception):
-            row["success"] = int(not s.ecephys.is_sorting_fail)
+            row["success"] = not s.ecephys.is_sorting_fail
             row["complete probe data"] = s.ecephys.sorted_probes
+        return row
+    
+    for row in executor.map(get_row, sessions):
         records.append(row)
     if not records:
         df = pd.DataFrame(columns=columns)
@@ -110,7 +117,15 @@ def get_sessions_table(
             styles={'font-size': '12pt'},
             sizing_mode='stretch_width',
         )
-
+    # Custom formatter to highlight cells with False in the success column
+    def color_negative_red(val):
+        """
+        Takes a scalar and returns a string with
+        the css property `'color: red'` for negative
+        bools, black otherwise.
+        """
+        color = 'red' if not val else ('white' if pn.config.theme == 'dark' else 'black')
+        return 'color: %s' % color
     stylesheet = """
     .tabulator-cell {
         font-size: 12px;
@@ -128,12 +143,13 @@ def get_sessions_table(
         embed_content=False,
         stylesheets=[stylesheet],
         formatters= {
-            'bool': {'type': 'tickCross'} # not working
+            'bool': {'type': 'tickCross'}, # not working        
         },     
         buttons={
-            'trigger': '<i class="fa fa-sync" title="re-run sorting"></i>',
+            'trigger': '<button type="button">Sort</button>',
         }
     )
+    table.style.map(color_negative_red)
     def callback(event):
         if event.column == 'trigger':
             try_run_sorting(df['session'].iloc[event.row])
@@ -197,9 +213,8 @@ def app():
         - Most data from CodeOcean is cached with a time-to-live of 10 minutes
         
         ### Run sorting
-        - Press the "reload" icon in the right-most column to run sorting for the session (via the trigger capsule) with default parameters
-            - If the trigger capsule is currently running for the session it won't be re-run
-            - The sorting pipeline itself is not checked
+        - Pressing the "Sort" button will launch the trigger capsule with the session's raw data asset, using default parameters
+            - If the trigger capsule or sorting pipeline are already running for the session, the operation will be cancelled
         - The trigger capsule - and the sorting pipeline - will be run from Ben's account, so you won't be able to stop computations
         - If you prefer to run the trigger capsule manually, grab the session's raw data asset ID from the expanded row in the table
         
