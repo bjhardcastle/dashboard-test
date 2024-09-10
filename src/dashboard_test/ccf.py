@@ -10,6 +10,7 @@ import numpy as np
 import numpy.typing as npt
 import polars as pl
 import upath
+import panel as pn
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ PROJECTION_TO_AXIS = {'sagittal': 'ml', 'coronal': 'ap', 'horizontal': 'dv'}
 PROJECTION_YX = {'sagittal': ('dv', 'ap'), 'coronal': ('dv', 'ml'), 'horizontal': ('ap', 'ml')}
 
 
-@functools.cache
+@pn.cache
 def get_ccf_volume(left_hemisphere = True, right_hemisphere=False) -> npt.NDArray:
     """
     array[ap, ml, dv]
@@ -52,13 +53,14 @@ def get_ccf_volume(left_hemisphere = True, right_hemisphere=False) -> npt.NDArra
         return volume[*[slice(volume.shape[ml_dim] // 2, volume.shape[ml_dim]) if dim == ml_dim else slice(None) for dim in range(3)]]
     return volume
 
+@pn.cache
 def get_midline_ccf_ml() -> float:
     return RESOLUTION_UM * 0.5 * get_ccf_volume(
         left_hemisphere=True,
         right_hemisphere=True,
     ).shape[AXIS_TO_DIM['ml']]
     
-@functools.cache
+@pn.cache
 def get_ccf_structure_tree_df() -> pl.DataFrame:
     local_path = upath.UPath('//allen/programs/mindscope/workgroups/np-behavior/ccf_structure_tree_2017.csv')
     cloud_path = upath.UPath('https://raw.githubusercontent.com/cortex-lab/allenCCF/master/structure_tree_safe_2017.csv')
@@ -80,7 +82,8 @@ def get_ccf_structure_tree_df() -> pl.DataFrame:
         )
         .drop('r', 'g', 'b')
     ).collect()
-    
+
+@pn.cache
 def get_ccf_structure_info(ccf_acronym_or_id: str | int) -> dict:
     """
     >>> get_ccf_structure_info('MOs')
@@ -97,7 +100,7 @@ def get_ccf_structure_info(ccf_acronym_or_id: str | int) -> dict:
         logger.warning(f"Multiple areas found: {results['acronym'].to_list()}. Using the first one")
     return results[0].limit(1).to_dicts()[0]
 
-
+@pn.cache
 def get_ccf_immediate_children_ids(ccf_acronym_or_id: str | int) -> set[int]:
     """
     >>> ids = get_ccf_immediate_children_ids('MOs')
@@ -114,6 +117,7 @@ def get_ccf_immediate_children_ids(ccf_acronym_or_id: str | int) -> set[int]:
         .get_column('id')
     )
 
+@pn.cache
 def get_ccf_children_ids_in_volume(ccf_acronym_or_id: str | int | None) -> set[int]:
     """
     >>> ids = get_ccf_children_ids_in_volume('MOs')
@@ -140,7 +144,7 @@ def get_ccf_children_ids_in_volume(ccf_acronym_or_id: str | int | None) -> set[i
     return children
 
 
-@functools.cache
+@pn.cache
 def _ccf_acronym_to_id() -> dict[str, int]:
     """
     Use convert_ccf_acronyms_or_ids()
@@ -152,7 +156,7 @@ def _ccf_acronym_to_id() -> dict[str, int]:
     """
     return dict(zip(*[get_ccf_structure_tree_df().get_column(col) for col in ('acronym', 'id')]))
 
-@functools.cache
+@pn.cache
 def _ccf_id_to_acronym() -> dict[int, str]:
     """
     Use convert_ccf_acronyms_or_ids()
@@ -166,6 +170,7 @@ def _ccf_id_to_acronym() -> dict[int, str]:
 
 
 T = TypeVar('T', int, str, contravariant=True)
+@pn.cache
 def convert_ccf_acronyms_or_ids(ccf_acronym_or_id: T | Iterable[T]) -> T | tuple[T]:
     """
     >>> convert_ccf_acronyms_or_ids('MOs')
@@ -205,6 +210,7 @@ def isin_numba(volume: npt.NDArray[np.uint32], ids: set[int]) -> npt.NDArray[np.
             result[i] = True
     return result.reshape(shape_a)
 
+@pn.cache
 def get_ccf_volume_binary_mask(
     ccf_acronym_or_id: str | int | None = None,
     include_right_hemisphere: bool = False,
@@ -244,11 +250,11 @@ def get_ccf_volume_binary_mask(
         logger.info(f"Masked volume found for {ccf_acronym_or_id} with {kind=!r} in {time.time() - t0:.2f}s")
     return masked_volume
 
-@functools.cache
+@pn.cache
 def get_ids_in_volume() -> set[int]:
     return set(np.unique(get_ccf_volume()))
 
-@functools.cache
+@pn.cache
 def get_acronyms_in_volume() -> set[str]:
     """Reverse lookup on integers in ccf volume to get their corresponding acronyms
     
@@ -257,7 +263,7 @@ def get_acronyms_in_volume() -> set[str]:
     """
     return set(get_ccf_structure_tree_df().filter(pl.col('id').is_in(get_ids_in_volume()))['acronym'])
 
-@functools.cache
+@pn.cache
 def get_ccf_projection(
     ccf_acronym_or_id: str | int | None = None,
     volume: npt.NDArray | None = None, 
@@ -313,7 +319,6 @@ def get_ccf_projection(
     rgba_image = np.concatenate((rgb_image, density_projection[:, :, np.newaxis]), axis=-1)
     logger.info(f'Returning {rgba_image.shape=}')
     return rgba_image
-
 
 def get_scatter_image(
     ccf_locations_df: pl.DataFrame | pl.LazyFrame,
