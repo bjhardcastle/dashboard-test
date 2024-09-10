@@ -89,6 +89,9 @@ def get_sessions_table(
         with contextlib.suppress(Exception):
             row["success"] = not s.ecephys.is_sorting_fail
             row["complete probe data"] = s.ecephys.sorted_probes
+        if row["jobs running"]:
+            row["success"] = None
+            row["complete probe data"] = None
         return row
     
     for row in executor.map(get_row, sessions):
@@ -99,18 +102,27 @@ def get_sessions_table(
         df = pd.DataFrame(records).sort_values('session')
     
     def content_fn(row) -> pn.pane.Str:
+        txt = ''
+        session = aind_session.Session(row['session'])
         try:
             output = (
-                aind_session.Session(row['session']).ecephys.sorted_data_dir / 'output'
+                session.ecephys.sorted_data_dir / 'output'
             ).read_text()
 
         except AttributeError:
-            txt = 'no sorted data found'
+            output = None
+        
+        if session.is_uploaded:
+            txt += f"\nraw asset ID: {aind_session.Session(row['session']).raw_data_asset.id}"
+
+        if row["jobs running"]:
+            txt += f"\nsorting jobs in progress: {row['jobs running']}" 
+        elif output is None:
+            txt += '\nno sorted data found'
         else:
-            txt = (
-            	f"raw asset ID: {aind_session.Session(row['session']).raw_data_asset.id}\n"
-                f"sorted asset ID: {aind_session.Session(row['session']).ecephys.sorted_data_asset.id}\n"
-                f"\noutput:\n{output}"
+            txt += (
+                f"\nsorted asset ID: {aind_session.Session(row['session']).ecephys.sorted_data_asset.id}"
+                f"\n\noutput:\n{output}"
             )
         return pn.pane.Str(
             object=txt,
