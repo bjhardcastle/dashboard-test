@@ -237,15 +237,22 @@ def app():
         alert_type='info',
         sizing_mode="stretch_width",
     )
+    refresh_table_button = pn.widgets.Button(name="Refresh table", button_type="primary")
     sidebar = pn.Column(
         subject_id,
         specific_date,
         start_date,
         end_date,
+        refresh_table_button,
     )
-
+    # add on click event to refresh table
+    def refresh_table(event):
+        v = subject_id.value
+        subject_id.value = ''
+        subject_id.value = v
+    refresh_table_button.on_click(refresh_table)
+        
     bound_get_session_df = pn.bind(get_sessions_table, subject_id, specific_date, start_date, end_date)
-
     return pn.template.MaterialTemplate(
         site="DR dashboard",
         title=pathlib.Path(__file__).stem.replace('_', ' ').lower(),
