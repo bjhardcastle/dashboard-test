@@ -199,11 +199,12 @@ def try_run_sorting(session_id: str) -> None:
         pn.state.notifications.warning(f"Sorting already triggered")
         return
     try:
-        computation = session.ecephys.run_sorting()
+        computation = session.ecephys.run_sorting(skip_already_sorting=False) # we already checked
     except Exception as e:
         logger.error(f"Failed to launch trigger capsule for {session_id}: {e}")
         pn.state.notifications.error(f"Failed to run trigger capsule:\n{e!r}")
     else:
+        assert computation is not None, "run_sorting computation returned should be non-None as we disabled 'skip_already_sorting'"
         logger.info(f"Launched trigger capsule for {session_id} with raw data asset {session.raw_data_asset.id}")
         pn.state.notifications.success(f"Launched trigger capsule")
 
