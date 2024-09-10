@@ -84,8 +84,8 @@ def get_sessions_table(
         row["subject"] = s.subject_id
         with contextlib.suppress(AttributeError):
             row["raw asset"] = s.raw_data_asset.id
-            row["latest sorted asset"] = s.ecephys.sorted_data_asset.id
             row["jobs running"] = [c.name for c in current_sorting_computations if any(asset.id == s.raw_data_asset.id for asset in c.data_assets)]
+            row["latest sorted asset"] = s.ecephys.sorted_data_asset.id
         with contextlib.suppress(Exception):
             row["success"] = not s.ecephys.is_sorting_fail
             row["complete probe data"] = s.ecephys.sorted_probes
