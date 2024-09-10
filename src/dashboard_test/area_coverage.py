@@ -1,4 +1,5 @@
 import logging
+import pathlib
 from typing import Literal, TypeVar
 
 import matplotlib.pyplot as plt
@@ -727,62 +728,66 @@ amplitude cutoff `{('< ' + str(AMPLITUDE_CUTOFF_THRESHOLD)) if good_units_sessio
 presence ratio `{('> ' + str(PRESENCE_RATIO_THRESHOLD)) if good_units_sessions else '-'}`
 """ 
     return pn.pane.Markdown(stats)
-bound_display_stats = pn.bind(display_stats, good_units_sessions=toggle_good_units_passing_sessions)
 
-search_area = dict(
-    filter_area=filter_area,
-    filter_type=filter_type,
-    case_sensitive=toggle_case_sensitive,
-    include_right_hemisphere=toggle_right_hemisphere,
-    good_units_sessions=toggle_good_units_passing_sessions,
-)
-search_insertion = dict(
-    filter_implant_location=search_implant_location,
-    filter_probe_letter=search_probe_letter,
-)
-bound_barplot_unit_locations = pn.bind(barplot_unit_locations, **search_area, group_by=select_group_by)
-bound_barplot_co_recorded_structures = pn.bind(barplot_co_recorded_structures, **search_area)
-bound_all_unit_counts_table = pn.bind(table_all_unit_counts, **search_area, **search_insertion)
-bound_insertions_table = pn.bind(table_insertions, **search_area, **search_insertion)
-bound_ccf_locations = pn.bind(
-    plot_ccf_locations_2d, 
-    **search_area, 
-    show_whole_probe_tracks=toggle_whole_probe,
-    **search_insertion,
-    show_implant_location_query_for_all_areas=toggle_implant_location_query_for_all_areas,
-    show_parent_brain_region=toggle_parent_brain_region,
-)
 
-plot_column_a = pn.Column(
-    bound_all_unit_counts_table,
-    pn.layout.Spacer(height=50),
-    bound_insertions_table,
-)
-plot_column_b = pn.Column(
-    bound_ccf_locations,
-)
-sidebar = pn.Column(
-    pn.WidgetBox(
-        '', # name, can include markdown for title
-        select_group_by,
-        filter_type,
-        filter_area,
-        toggle_case_sensitive,
-        toggle_good_units_passing_sessions,
-        toggle_right_hemisphere,
-        toggle_parent_brain_region,
-        pn.layout.Divider(margin=(10, 0, 15, 0)),
-        search_implant_location,
-        search_probe_letter,
-        toggle_implant_location_query_for_all_areas,
-        toggle_whole_probe,
-        pn.layout.Divider(margin=(20, 0, 15, 0)),
-        bound_display_stats,
-    ),
-)
-pn.template.MaterialTemplate(
-    site="DR dashboard",
-    title=__file__.split('\\')[-1].split('.py')[0].replace('_', ' ').title(),
-    sidebar=[sidebar],
-    main=[pn.Row(plot_column_a, plot_column_b), bound_barplot_unit_locations, bound_barplot_co_recorded_structures],
-).servable()
+def app():
+	bound_display_stats = pn.bind(display_stats, good_units_sessions=toggle_good_units_passing_sessions)
+	search_area = dict(
+		filter_area=filter_area,
+		filter_type=filter_type,
+		case_sensitive=toggle_case_sensitive,
+		include_right_hemisphere=toggle_right_hemisphere,
+		good_units_sessions=toggle_good_units_passing_sessions,
+	)
+	search_insertion = dict(
+		filter_implant_location=search_implant_location,
+		filter_probe_letter=search_probe_letter,
+	)
+	bound_barplot_unit_locations = pn.bind(barplot_unit_locations, **search_area, group_by=select_group_by)
+	bound_barplot_co_recorded_structures = pn.bind(barplot_co_recorded_structures, **search_area)
+	bound_all_unit_counts_table = pn.bind(table_all_unit_counts, **search_area, **search_insertion)
+	bound_insertions_table = pn.bind(table_insertions, **search_area, **search_insertion)
+	bound_ccf_locations = pn.bind(
+		plot_ccf_locations_2d, 
+		**search_area, 
+		show_whole_probe_tracks=toggle_whole_probe,
+		**search_insertion,
+		show_implant_location_query_for_all_areas=toggle_implant_location_query_for_all_areas,
+		show_parent_brain_region=toggle_parent_brain_region,
+	)
+
+	plot_column_a = pn.Column(
+		bound_all_unit_counts_table,
+		pn.layout.Spacer(height=50),
+		bound_insertions_table,
+	)
+	plot_column_b = pn.Column(
+		bound_ccf_locations,
+	)
+	sidebar = pn.Column(
+		pn.WidgetBox(
+		'', # name, can include markdown for title
+		select_group_by,
+		filter_type,
+		filter_area,
+		toggle_case_sensitive,
+		toggle_good_units_passing_sessions,
+		toggle_right_hemisphere,
+		toggle_parent_brain_region,
+		pn.layout.Divider(margin=(10, 0, 15, 0)),
+		search_implant_location,
+		search_probe_letter,
+		toggle_implant_location_query_for_all_areas,
+		toggle_whole_probe,
+		pn.layout.Divider(margin=(20, 0, 15, 0)),
+		bound_display_stats,
+		),
+	)
+	return pn.template.MaterialTemplate(
+		site="DR dashboard",
+		title=pathlib.Path(__file__).stem.split('\\')[-1].split('.py')[0].replace('_', ' ').title(),
+		sidebar=[sidebar],
+		main=[pn.Row(plot_column_a, plot_column_b), bound_barplot_unit_locations, bound_barplot_co_recorded_structures],
+	)
+
+app().servable()
