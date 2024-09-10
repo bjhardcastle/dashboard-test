@@ -29,11 +29,14 @@ PRESENCE_RATIO_THRESHOLD = 0.95
 
 @pn.cache
 def get_component_lf(nwb_component: npc_lims.NWBComponentStr) -> pl.LazyFrame:
-    path = npc_lims.get_cache_path(
-        nwb_component, 
-        version='v0.0.231', 
-        consolidated=True,
-    )
+    # try:
+    #     path = npc_lims.get_cache_path(
+    #         nwb_component, 
+    #         version='v0.0.235', 
+    #         consolidated=True,
+    #     )
+    # except:
+    path = f'//allen/ai/homedirs/ben.hardcastle/dr-dashboard/data/v0.0.235/{nwb_component}.parquet'
     logger.info(f"Reading dataframe from {path}")
     return pl.scan_parquet(path)
 
