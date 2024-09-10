@@ -701,7 +701,7 @@ select_group_by = pn.widgets.Select(name='Group by', options=['session_id', 'sub
 search_implant_location = pn.widgets.TextInput(name='Filter implant or hole', placeholder='e.g. "2002 E2" or "2002"')
 search_probe_letter = pn.widgets.TextInput(name='Filter probe letter', placeholder='e.g. "A" or "B"')
 toggle_right_hemisphere = pn.widgets.Checkbox(name='Include right hemisphere', value=False)
-toggle_parent_brain_region = pn.widgets.Checkbox(name='Show parent structure', value=False)
+toggle_parent_brain_region = pn.widgets.Checkbox(name='Show parent structure (for layers)', value=False)
 toggle_whole_probe = pn.widgets.Checkbox(name='Show complete probe tracks', value=True)
 toggle_implant_location_query_for_all_areas = pn.widgets.Checkbox(name='Show matching insertions that missed area(s)', value=False)
 toggle_good_units_passing_sessions = pn.widgets.Checkbox(name='Only good units from passing DR sessions', value=True)
@@ -711,21 +711,20 @@ def display_stats(
 ) -> pn.pane.Markdown:
     df = get_good_units_df(good_units_sessions=good_units_sessions)
     stats = f"""
-### stats
 
 units `{len(df)}`
 sessions `{len(df['session_id'].unique())}`
 subjects `{len(df['subject_id'].unique())}`
-"""
-    if good_units_sessions:
-        stats += f"""
 
 ---
-cross-modal dprime `> {DPRIME_THRESHOLD}`
-same-modal dprime `> {DPRIME_THRESHOLD}`
-isi violations ratio `< {ISI_VIOLATIONS_RATIO_THRESHOLD}`
-amplitude cutoff `< {AMPLITUDE_CUTOFF_THRESHOLD}`
-presence ratio `> {PRESENCE_RATIO_THRESHOLD}`
+
+**filtering**
+
+cross-modal dprime `{('> ' + str(DPRIME_THRESHOLD)) if good_units_sessions else '-'}`
+same-modal dprime `{('> ' + str(DPRIME_THRESHOLD)) if good_units_sessions else '-'}`
+isi violations ratio `{('< ' + str(ISI_VIOLATIONS_RATIO_THRESHOLD)) if good_units_sessions else '-'}`
+amplitude cutoff `{('< ' + str(AMPLITUDE_CUTOFF_THRESHOLD)) if good_units_sessions else '-'}`
+presence ratio `{('> ' + str(PRESENCE_RATIO_THRESHOLD)) if good_units_sessions else '-'}`
 """ 
     return pn.pane.Markdown(stats)
 bound_display_stats = pn.bind(display_stats, good_units_sessions=toggle_good_units_passing_sessions)
